@@ -1,3 +1,9 @@
+// Configuración del taller con LOGO
+const tallerConfig = {
+  // LOGO - Coloca tu logo en: public/logo-taller.png
+  logoUrl: 'public/logotaller.jpg', // Así se accede al logo
+};
+
 // Función para generar PDF del presupuesto/recibo
 export function generateOrderPDF(order, client, shopSettings, isDepositOnly = false) {
   // Crear el contenido del PDF como HTML
@@ -15,10 +21,23 @@ export function generateOrderPDF(order, client, shopSettings, isDepositOnly = fa
           color: #333;
         }
         .header {
-          text-align: center;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
           margin-bottom: 30px;
           padding-bottom: 20px;
           border-bottom: 2px solid #0d9488;
+        }
+        .logo-area {
+          flex: 1;
+        }
+        .logo-area img {
+          max-height: 60px;
+          max-width: 200px;
+        }
+        .shop-info {
+          flex: 2;
+          text-align: right;
         }
         .shop-name {
           font-size: 24px;
@@ -26,10 +45,10 @@ export function generateOrderPDF(order, client, shopSettings, isDepositOnly = fa
           color: #0d9488;
           margin: 0;
         }
-        .shop-info {
+        .shop-detail {
           font-size: 12px;
           color: #666;
-          margin: 5px 0;
+          margin: 2px 0;
         }
         .title {
           font-size: 18px;
@@ -132,11 +151,17 @@ export function generateOrderPDF(order, client, shopSettings, isDepositOnly = fa
       </style>
     </head>
     <body>
+      <!-- HEADER CON LOGO AÑADIDO -->
       <div class="header">
-        <h1 class="shop-name">${shopSettings.shopName}</h1>
-        <p class="shop-info">${shopSettings.shopAddress}</p>
-        <p class="shop-info">Tel: ${shopSettings.shopPhone} | Email: ${shopSettings.shopEmail}</p>
-        <p class="shop-info">CIF: ${shopSettings.shopCIF}</p>
+        <div class="logo-area">
+          <img src="${tallerConfig.logoUrl}" alt="Logo del taller" onerror="this.style.display='none'">
+        </div>
+        <div class="shop-info">
+          <h1 class="shop-name">${shopSettings.shopName}</h1>
+          <p class="shop-detail">${shopSettings.shopAddress}</p>
+          <p class="shop-detail">Tel: ${shopSettings.shopPhone} | Email: ${shopSettings.shopEmail}</p>
+          <p class="shop-detail">CIF: ${shopSettings.shopCIF}</p>
+        </div>
       </div>
 
       <h2 class="title">${isDepositOnly ? 'RECIBO DE DEPÓSITO' : 'PRESUPUESTO DE REPARACIÓN'}</h2>
@@ -248,11 +273,11 @@ export function generateOrderPDF(order, client, shopSettings, isDepositOnly = fa
 
 // Función específica para resguardo de recepción
 export function generateReceptionPDF(order, client, type = 'cliente') {
-  const shopName = 'OrfebreCRM Taller de Joyería';
-  const shopAddress = 'Calle Principal 123';
-  const shopPhone = '+34 912 345 678';
-  const shopEmail = 'info@orfebrecrm.com';
-  const shopCIF = 'B-12345678';
+  const shopName = 'Taller Relojería El Corte Ingles de Sanchinarro';
+  const shopAddress = 'Calle Margarita de Parma 1';
+  const shopPhone = '+34 672373275';
+  const shopEmail = 'tallersanchinarro@rubiorelojeros.com';
+  const shopCIF = 'B-88615489';
 
   const formatDate = (dateString) => {
     if (!dateString) return new Date().toLocaleDateString();
@@ -281,21 +306,34 @@ export function generateReceptionPDF(order, client, type = 'cliente') {
           color: #333;
         }
         .header {
-          text-align: center;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
           margin-bottom: 30px;
           padding-bottom: 20px;
           border-bottom: 2px solid #0d9488;
+        }
+        .logo-area {
+          flex: 1;
+        }
+        .logo-area img {
+          max-height: 60px;
+          max-width: 200px;
+        }
+        .shop-info {
+          flex: 2;
+          text-align: right;
         }
         .shop-name {
           font-size: 24px;
           font-weight: bold;
           color: #0d9488;
-          margin: 0;
+          margin: 0 0 5px 0;
         }
-        .shop-info {
+        .shop-detail {
           font-size: 12px;
           color: #666;
-          margin: 3px 0;
+          margin: 2px 0;
         }
         .title {
           font-size: 18px;
@@ -423,11 +461,17 @@ export function generateReceptionPDF(order, client, type = 'cliente') {
         Nº RECEPCIÓN: ${order.orderNumber}
       </div>
 
+      <!-- HEADER CON LOGO AÑADIDO -->
       <div class="header">
-        <h1 class="shop-name">${shopName}</h1>
-        <p class="shop-info">${shopAddress}</p>
-        <p class="shop-info">Tel: ${shopPhone} | Email: ${shopEmail}</p>
-        <p class="shop-info">CIF: ${shopCIF}</p>
+        <div class="logo-area">
+          <img src="${tallerConfig.logoUrl}" alt="Logo del taller" onerror="this.style.display='none'">
+        </div>
+        <div class="shop-info">
+          <h1 class="shop-name">${shopName}</h1>
+          <p class="shop-detail">${shopAddress}</p>
+          <p class="shop-detail">Tel: ${shopPhone} | Email: ${shopEmail}</p>
+          <p class="shop-detail">CIF: ${shopCIF}</p>
+        </div>
       </div>
 
       <div class="badge">
