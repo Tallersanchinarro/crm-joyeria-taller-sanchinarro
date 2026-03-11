@@ -21,7 +21,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { generateOrderPDF } from '../utils/pdfGenerator';
+import { generateReceptionPDF } from '../utils/pdfGenerator';
 
 function ReparacionesActivas() {
   const navigate = useNavigate();
@@ -201,7 +201,7 @@ function ReparacionesActivas() {
   const handlePrintReceipt = (order) => {
     const client = clients.find(c => c.id === order.clientId);
     if (client) {
-      generateOrderPDF(order, client, {}, true);
+      generateReceptionPDF(order, client, {}, true);
     }
   };
 

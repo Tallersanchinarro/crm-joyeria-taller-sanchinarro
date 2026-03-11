@@ -15,17 +15,20 @@ import {
   Trash2,
   X,
   Save,
-  Gem
+  Gem,
+  AlertCircle
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 function Clientes() {
   const navigate = useNavigate();
-  const { clients, orders, createClient, updateClient } = useApp();
+  const { clients, orders, createClient, updateClient, deleteClient } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClient, setSelectedClient] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -43,36 +46,75 @@ function Clientes() {
 
   // Obtener órdenes de un cliente
   const getClientOrders = (clientId) => {
-    return orders.filter(o => o.clientId === clientId);
+    return orders.filter(o => o.client_id === clientId);
   };
 
   // Obtener órdenes activas
   const getActiveOrders = (clientId) => {
     return orders.filter(o => 
-      o.clientId === clientId && 
+      o.client_id === clientId && 
       o.status !== 'Entregado' && 
       o.status !== 'Rechazado'
     ).length;
   };
 
-  // Guardar cliente
-  const handleSaveClient = () => {
-    if (!formData.name || !formData.phone) return;
+  // Obtener última orden
+  const getLastOrderDate = (clientId) => {
+    const clientOrders = orders.filter(o => o.client_id === clientId);
+    if (clientOrders.length === 0) return null;
+    
+    const lastOrder = clientOrders.sort((a, b) => 
+      new Date(b.created_at) - new Date(a.created_at)
+    )[0];
+    
+    return lastOrder.created_at;
+  };
 
-    if (isEditing && selectedClient) {
-      updateClient(selectedClient.id, formData);
-    } else {
-      createClient({
-        ...formData,
-        createdAt: new Date().toISOString(),
-        totalOrders: 0
-      });
+  // Guardar cliente
+  const handleSaveClient = async () => {
+    if (!formData.name || !formData.phone) {
+      setError('Nombre y teléfono son obligatorios');
+      return;
     }
 
-    setIsModalOpen(false);
-    setSelectedClient(null);
-    setIsEditing(false);
-    setFormData({ name: '', phone: '', email: '', address: '', notes: '' });
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (isEditing && selectedClient) {
+        await updateClient(selectedClient.id, formData);
+      } else {
+        await createClient(formData);
+      }
+      
+      setIsModalOpen(false);
+      resetForm();
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Eliminar cliente
+  const handleDeleteClient = async (client) => {
+    const clientOrders = getClientOrders(client.id);
+    
+    if (clientOrders.length > 0) {
+      alert('No se puede eliminar un cliente con órdenes asociadas');
+      return;
+    }
+
+    if (window.confirm(`¿Estás seguro de eliminar a ${client.name}?`)) {
+      setLoading(true);
+      try {
+        await deleteClient(client.id);
+      } catch (error) {
+        alert('Error al eliminar: ' + error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
   // Abrir modal para editar
@@ -91,9 +133,15 @@ function Clientes() {
 
   // Abrir modal para nuevo
   const handleNewClient = () => {
-    setFormData({ name: '', phone: '', email: '', address: '', notes: '' });
+    resetForm();
     setIsEditing(false);
     setIsModalOpen(true);
+  };
+
+  const resetForm = () => {
+    setFormData({ name: '', phone: '', email: '', address: '', notes: '' });
+    setSelectedClient(null);
+    setError(null);
   };
 
   return (
@@ -109,6 +157,7 @@ function Clientes() {
         <button
           onClick={handleNewClient}
           className="btn-primary flex items-center space-x-2"
+          disabled={loading}
         >
           <Plus className="w-4 h-4" />
           <span>Nuevo cliente</span>
@@ -150,7 +199,7 @@ function Clientes() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contacto</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Órdenes</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Desde</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Última actividad</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"></th>
                 </tr>
               </thead>
@@ -158,6 +207,7 @@ function Clientes() {
                 {filteredClients.map((client) => {
                   const clientOrders = getClientOrders(client.id);
                   const activeOrders = getActiveOrders(client.id);
+                  const lastOrderDate = getLastOrderDate(client.id);
                   
                   return (
                     <tr key={client.id} className="hover:bg-gray-50 transition-colors">
@@ -201,7 +251,7 @@ function Clientes() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
-                        {new Date(client.createdAt).toLocaleDateString()}
+                        {lastOrderDate ? new Date(lastOrderDate).toLocaleDateString() : 'Sin actividad'}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-2">
@@ -216,8 +266,17 @@ function Clientes() {
                             onClick={() => handleEditClient(client)}
                             className="p-1 hover:bg-gray-100 rounded"
                             title="Editar"
+                            disabled={loading}
                           >
                             <Edit className="w-4 h-4 text-gray-600" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClient(client)}
+                            className="p-1 hover:bg-red-100 rounded"
+                            title="Eliminar"
+                            disabled={loading || clientOrders.length > 0}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600" />
                           </button>
                         </div>
                       </td>
@@ -239,7 +298,10 @@ function Clientes() {
                 {isEditing ? 'Editar cliente' : 'Nuevo cliente'}
               </h3>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  resetForm();
+                }}
                 className="p-1 hover:bg-gray-100 rounded"
               >
                 <X className="w-5 h-5" />
@@ -247,6 +309,13 @@ function Clientes() {
             </div>
             
             <div className="p-4 space-y-4">
+              {error && (
+                <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-2" />
+                  {error}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nombre *
@@ -316,18 +385,31 @@ function Clientes() {
 
             <div className="p-4 border-t border-gray-200 flex justify-end space-x-2">
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  resetForm();
+                }}
                 className="btn-secondary"
+                disabled={loading}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSaveClient}
-                disabled={!formData.name || !formData.phone}
-                className="btn-primary flex items-center space-x-2"
+                disabled={loading || !formData.name || !formData.phone}
+                className="btn-primary flex items-center space-x-2 disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
-                <span>{isEditing ? 'Guardar' : 'Crear'}</span>
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Guardando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>{isEditing ? 'Guardar' : 'Crear'}</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

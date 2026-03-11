@@ -29,7 +29,7 @@ import {
   Settings
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { generateOrderPDF } from '../utils/pdfGenerator';
+import { generateReceptionPDF } from '../utils/pdfGenerator'; // CAMBIADO AQUÍ
 
 function DetalleReparacion() {
   const { id } = useParams();
@@ -212,10 +212,12 @@ function DetalleReparacion() {
     }, 2000);
   };
 
-  // Generar PDF
+  // Generar PDF - AHORA USA generateReceptionPDF
   const generatePDF = (type) => {
     if (order && client) {
-      generateOrderPDF(order, client, {}, type === 'budget');
+      // type === 'budget' ? 'taller' : 'cliente'
+      const pdfType = type === 'budget' ? 'taller' : 'cliente';
+      generateReceptionPDF(order, client, pdfType);
     }
   };
 

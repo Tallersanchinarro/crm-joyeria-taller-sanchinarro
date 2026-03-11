@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, User, Phone, Mail, Calendar, Clock, Tag, DollarSign, FileText, Printer, Edit } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { generateOrderPDF } from '../../utils/pdfGenerator';
+import { generateReceptionPDF } from '../../utils/pdfGenerator'; // CAMBIADO AQUÍ
 
 function OrderDetailsModal({ order, isOpen, onClose }) {
   const navigate = useNavigate();
@@ -28,7 +28,8 @@ function OrderDetailsModal({ order, isOpen, onClose }) {
 
   const handlePrintPDF = () => {
     if (client) {
-      generateOrderPDF(order, client, {}, false);
+      // Usamos generateReceptionPDF con tipo 'cliente' para el resguardo
+      generateReceptionPDF(order, client, 'cliente'); // CAMBIADO AQUÍ
     }
   };
 

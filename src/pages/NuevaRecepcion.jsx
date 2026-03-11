@@ -12,58 +12,34 @@ import {
   CheckCircle,
   Printer,
   FileText,
-  Copy
+  Copy,
+  Search
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { generateReceptionPDF } from '../utils/pdfGenerator';
 
-// Lista de tipos de joyas
 const tiposJoya = [
-  'Anillo',
-  'Collar',
-  'Pendientes',
-  'Pulsera',
-  'Reloj',
-  'Medalla/Religiosa',
-  'Broche',
-  'Cadenas',
-  'Gargantilla',
-  'Diadema',
-  'Juego completo',
-  'Otro'
+  'Anillo', 'Collar', 'Pendientes', 'Pulsera', 'Reloj',
+  'Medalla/Religiosa', 'Broche', 'Cadenas', 'Gargantilla',
+  'Diadema', 'Juego completo', 'Otro'
 ];
 
-// Lista de materiales
 const tiposMaterial = [
-  'Oro amarillo 18k',
-  'Oro blanco 18k',
-  'Oro rosa 18k',
-  'Oro 14k',
-  'Oro 9k',
-  'Oro 24k',
-  'Plata 925',
-  'Plata ley',
-  'Acero inoxidable',
-  'Titanio',
-  'Bronce',
-  'Cobre',
-  'Latón',
-  'Rodio',
-  'Paladio',
-  'Platino',
-  'Acero quirúrgico',
-  'Madera',
-  'Resina',
-  'Cuero',
-  'Otro'
+  'Oro amarillo 18k', 'Oro blanco 18k', 'Oro rosa 18k',
+  'Oro 14k', 'Oro 9k', 'Oro 24k', 'Plata 925', 'Plata ley',
+  'Acero inoxidable', 'Titanio', 'Bronce', 'Cobre', 'Latón',
+  'Rodio', 'Paladio', 'Platino', 'Acero quirúrgico',
+  'Madera', 'Resina', 'Cuero', 'Otro'
 ];
 
 function NuevaRecepcion() {
   const navigate = useNavigate();
-  const { createClient, createOrder } = useApp();
-  const [step, setStep] = useState(1); // 1: Cliente, 2: Joya, 3: Resguardo
+  const { clients, createClient, createOrder } = useApp();
+  const [step, setStep] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showClientSearch, setShowClientSearch] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
   const [cliente, setCliente] = useState({
-    id: '',
     name: '',
     phone: '',
     email: '',
@@ -73,12 +49,32 @@ function NuevaRecepcion() {
     itemType: '',
     material: '',
     description: '',
-    observations: '',
-    photos: []
+    observations: ''
   });
   const [fotos, setFotos] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [nuevaOrden, setNuevaOrden] = useState(null);
+
+  // Buscar clientes existentes
+  const filteredClients = clients.filter(c =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.phone.includes(searchTerm)
+  ).slice(0, 5);
+
+  // Seleccionar cliente existente
+  const handleSelectClient = (client) => {
+    setSelectedClient(client);
+    setCliente({
+      name: client.name,
+      phone: client.phone,
+      email: client.email || '',
+      address: client.address || ''
+    });
+    setShowClientSearch(false);
+    setStep(2);
+  };
 
   // Generar número de recepción
   const generarNumeroRecepcion = () => {
@@ -90,77 +86,67 @@ function NuevaRecepcion() {
     return `R-${año}${mes}${dia}-${random}`;
   };
 
-  // Guardar recepción y generar orden
-  const handleGuardarRecepcion = () => {
-    // Crear o actualizar cliente
-    let clientId = cliente.id;
-    if (!clientId) {
-      const newClient = createClient({
-        name: cliente.name,
-        phone: cliente.phone,
-        email: cliente.email,
-        address: cliente.address,
-        createdAt: new Date().toISOString()
+  // Guardar recepción
+  const handleGuardarRecepcion = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      let clientId = selectedClient?.id;
+
+      // Crear cliente si no existe
+      if (!clientId) {
+        const newClient = await createClient({
+          name: cliente.name,
+          phone: cliente.phone,
+          email: cliente.email || null,
+          address: cliente.address || null,
+          notes: ''
+        });
+        clientId = newClient.id;
+      }
+
+      // Crear orden
+      const orderNumber = generarNumeroRecepcion();
+      const newOrder = await createOrder({
+        order_number: orderNumber,
+        client_id: clientId,
+        client_name: cliente.name,
+        client_phone: cliente.phone,
+        client_email: cliente.email || null,
+        item_type: recepcion.itemType,
+        material: recepcion.material,
+        description: recepcion.description,
+        observations: recepcion.observations || null,
+        status: 'Recibido',
+        budget: null,
+        budget_status: 'pendiente',
+        photos: fotos,
+        diagnosis: null,
+        priority: 'Normal'
       });
-      clientId = newClient.id;
+
+      setNuevaOrden(newOrder);
+      setStep(3);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
-
-    // Crear orden en estado "Recibido"
-    const orderNumber = generarNumeroRecepcion();
-    const newOrder = createOrder({
-      orderNumber,
-      clientId,
-      clientName: cliente.name,
-      clientPhone: cliente.phone,
-      clientEmail: cliente.email,
-      itemType: recepcion.itemType,
-      material: recepcion.material,
-      description: recepcion.description,
-      observations: recepcion.observations,
-      status: 'Recibido',
-      budget: null,
-      budgetStatus: 'pendiente',
-      createdAt: new Date().toISOString(),
-      estimatedDate: null,
-      photos: fotos,
-      diagnosis: null,
-      requiredWorks: [],
-      materials: []
-    });
-
-    setNuevaOrden(newOrder);
-    setStep(3); // Ir al paso de resguardo
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
   };
 
-  // Generar PDF para el cliente
   const handlePrintClientPDF = () => {
-    if (nuevaOrden && cliente) {
+    if (nuevaOrden && (selectedClient || cliente)) {
       generateReceptionPDF(nuevaOrden, cliente, 'cliente');
     }
   };
 
-  // Generar PDF para el taller
   const handlePrintWorkshopPDF = () => {
-    if (nuevaOrden && cliente) {
+    if (nuevaOrden && (selectedClient || cliente)) {
       generateReceptionPDF(nuevaOrden, cliente, 'taller');
     }
-  };
-
-  // Imprimir ambos
-  const handlePrintBoth = () => {
-    handlePrintClientPDF();
-    setTimeout(() => {
-      handlePrintWorkshopPDF();
-    }, 1000);
-  };
-
-  // Simular subida de fotos
-  const handleFotoUpload = (e) => {
-    const files = Array.from(e.target.files);
-    const nuevasFotos = files.map(file => URL.createObjectURL(file));
-    setFotos([...fotos, ...nuevasFotos]);
   };
 
   return (
@@ -188,21 +174,22 @@ function NuevaRecepcion() {
           />
         </div>
 
-        {/* Indicadores */}
         <div className="grid grid-cols-3 gap-2 mt-4">
-          <div className={`text-center ${step >= 1 ? 'text-primary-600' : 'text-gray-400'}`}>
-            <span className="text-sm font-medium">1. Cliente</span>
-          </div>
-          <div className={`text-center ${step >= 2 ? 'text-primary-600' : 'text-gray-400'}`}>
-            <span className="text-sm font-medium">2. Joya</span>
-          </div>
-          <div className={`text-center ${step >= 3 ? 'text-primary-600' : 'text-gray-400'}`}>
-            <span className="text-sm font-medium">3. Resguardo</span>
-          </div>
+          {['Cliente', 'Joya', 'Resguardo'].map((label, idx) => (
+            <div key={label} className={`text-center ${step >= idx + 1 ? 'text-primary-600' : 'text-gray-400'}`}>
+              <span className="text-sm font-medium">{idx + 1}. {label}</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Mensaje de éxito */}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg flex items-center">
+          <AlertCircle className="w-5 h-5 mr-2" />
+          {error}
+        </div>
+      )}
+
       {showSuccess && (
         <div className="fixed top-4 right-4 z-50 animate-slide-down">
           <div className="bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2">
@@ -212,7 +199,7 @@ function NuevaRecepcion() {
         </div>
       )}
 
-      {/* PASO 1: Datos del Cliente */}
+      {/* PASO 1: Cliente */}
       {step === 1 && (
         <div className="bg-white rounded-xl shadow-sm p-6 space-y-6">
           <h2 className="text-lg font-semibold text-gray-800 flex items-center">
@@ -220,62 +207,81 @@ function NuevaRecepcion() {
             Datos del Cliente
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre completo *
-              </label>
-              <input
-                type="text"
-                value={cliente.name}
-                onChange={(e) => setCliente({...cliente, name: e.target.value})}
-                className="input-field"
-                placeholder="Ej: María García López"
-                autoFocus
-              />
-            </div>
+          {/* Buscar cliente existente */}
+          <div>
+            <button
+              onClick={() => setShowClientSearch(!showClientSearch)}
+              className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center"
+            >
+              <Search className="w-4 h-4 mr-1" />
+              {showClientSearch ? 'Ocultar búsqueda' : 'Buscar cliente existente'}
+            </button>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Teléfono *
-              </label>
+            {showClientSearch && (
+              <div className="mt-3">
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o teléfono..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="input-field mb-2"
+                />
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {filteredClients.map(client => (
+                    <div
+                      key={client.id}
+                      onClick={() => handleSelectClient(client)}
+                      className="p-2 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer flex items-center justify-between"
+                    >
+                      <div>
+                        <p className="font-medium">{client.name}</p>
+                        <p className="text-sm text-gray-600">{client.phone}</p>
+                      </div>
+                      <span className="text-xs text-gray-400">{client.total_orders || 0} órdenes</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t pt-4">
+            <p className="text-sm text-gray-500 mb-4">O ingresa un cliente nuevo:</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <input
+                  type="text"
+                  placeholder="Nombre completo *"
+                  value={cliente.name}
+                  onChange={(e) => setCliente({...cliente, name: e.target.value})}
+                  className="input-field"
+                />
+              </div>
               <input
                 type="tel"
+                placeholder="Teléfono *"
                 value={cliente.phone}
                 onChange={(e) => setCliente({...cliente, phone: e.target.value})}
                 className="input-field"
-                placeholder="+34 612 345 678"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email (opcional)
-              </label>
               <input
                 type="email"
+                placeholder="Email (opcional)"
                 value={cliente.email}
                 onChange={(e) => setCliente({...cliente, email: e.target.value})}
                 className="input-field"
-                placeholder="cliente@email.com"
               />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Dirección (opcional)
-              </label>
               <input
                 type="text"
+                placeholder="Dirección (opcional)"
                 value={cliente.address}
                 onChange={(e) => setCliente({...cliente, address: e.target.value})}
-                className="input-field"
-                placeholder="Calle, ciudad..."
+                className="input-field md:col-span-2"
               />
             </div>
           </div>
 
-          <div className="flex justify-end pt-4">
+          <div className="flex justify-end">
             <button
               onClick={() => setStep(2)}
               disabled={!cliente.name || !cliente.phone}
@@ -287,7 +293,7 @@ function NuevaRecepcion() {
         </div>
       )}
 
-      {/* PASO 2: Datos de la Joya */}
+      {/* PASO 2: Joya */}
       {step === 2 && (
         <div className="bg-white rounded-xl shadow-sm p-6 space-y-6">
           <h2 className="text-lg font-semibold text-gray-800 flex items-center">
@@ -295,133 +301,73 @@ function NuevaRecepcion() {
             Datos de la Joya
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Tipo de joya */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de joya *
-              </label>
-              <select
-                value={recepcion.itemType}
-                onChange={(e) => setRecepcion({...recepcion, itemType: e.target.value})}
-                className="input-field"
-              >
-                <option value="">Seleccionar tipo</option>
-                {tiposJoya.map(tipo => (
-                  <option key={tipo} value={tipo}>{tipo}</option>
-                ))}
-              </select>
-            </div>
+          <div className="grid grid-cols-1 gap-4">
+            <select
+              value={recepcion.itemType}
+              onChange={(e) => setRecepcion({...recepcion, itemType: e.target.value})}
+              className="input-field"
+            >
+              <option value="">Tipo de joya *</option>
+              {tiposJoya.map(tipo => (
+                <option key={tipo} value={tipo}>{tipo}</option>
+              ))}
+            </select>
 
-            {/* Material */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Material principal *
-              </label>
-              <select
-                value={recepcion.material}
-                onChange={(e) => setRecepcion({...recepcion, material: e.target.value})}
-                className="input-field"
-              >
-                <option value="">Seleccionar material</option>
-                {tiposMaterial.map(material => (
-                  <option key={material} value={material}>{material}</option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={recepcion.material}
+              onChange={(e) => setRecepcion({...recepcion, material: e.target.value})}
+              className="input-field"
+            >
+              <option value="">Material *</option>
+              {tiposMaterial.map(material => (
+                <option key={material} value={material}>{material}</option>
+              ))}
+            </select>
 
-            {/* Descripción */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Descripción del problema *
-              </label>
-              <textarea
-                value={recepcion.description}
-                onChange={(e) => setRecepcion({...recepcion, description: e.target.value})}
-                rows="4"
-                className="input-field"
-                placeholder="Ej: La piedra está floja, el cierre no cierra bien..."
-              />
-            </div>
+            <textarea
+              value={recepcion.description}
+              onChange={(e) => setRecepcion({...recepcion, description: e.target.value})}
+              rows="4"
+              className="input-field"
+              placeholder="Descripción del problema *"
+            />
 
-            {/* Observaciones */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Observaciones (opcional)
-              </label>
-              <textarea
-                value={recepcion.observations}
-                onChange={(e) => setRecepcion({...recepcion, observations: e.target.value})}
-                rows="2"
-                className="input-field"
-                placeholder="Notas para el joyero..."
-              />
-            </div>
-
-            {/* Fotos */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fotos (opcional)
-              </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleFotoUpload}
-                  className="hidden"
-                  id="foto-upload"
-                />
-                <label
-                  htmlFor="foto-upload"
-                  className="flex flex-col items-center cursor-pointer"
-                >
-                  <Camera className="w-8 h-8 text-gray-400 mb-2" />
-                  <p className="text-sm text-gray-500">Haz clic para subir fotos</p>
-                </label>
-                
-                {fotos.length > 0 && (
-                  <div className="mt-4 grid grid-cols-4 gap-2">
-                    {fotos.map((foto, index) => (
-                      <div key={index} className="relative">
-                        <img 
-                          src={foto} 
-                          alt={`Foto ${index + 1}`} 
-                          className="w-full h-16 object-cover rounded-lg"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <textarea
+              value={recepcion.observations}
+              onChange={(e) => setRecepcion({...recepcion, observations: e.target.value})}
+              rows="2"
+              className="input-field"
+              placeholder="Observaciones (opcional)"
+            />
           </div>
 
-          {/* Nota informativa */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start space-x-3">
             <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-blue-800">Proceso</p>
-              <p className="text-xs text-blue-700">
-                La joya queda registrada para análisis. Al finalizar, podrás imprimir el resguardo.
-              </p>
-            </div>
+            <p className="text-sm text-blue-700">
+              La joya queda registrada para análisis. El presupuesto se generará después.
+            </p>
           </div>
 
-          <div className="flex justify-between pt-4">
-            <button
-              onClick={() => setStep(1)}
-              className="btn-secondary"
-            >
+          <div className="flex justify-between">
+            <button onClick={() => setStep(1)} className="btn-secondary">
               Atrás
             </button>
             <button
               onClick={handleGuardarRecepcion}
-              disabled={!recepcion.itemType || !recepcion.material || !recepcion.description}
+              disabled={!recepcion.itemType || !recepcion.material || !recepcion.description || loading}
               className="btn-primary px-6 flex items-center space-x-2"
             >
-              <Save className="w-4 h-4" />
-              <span>Guardar y continuar</span>
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Guardar recepción</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -430,34 +376,31 @@ function NuevaRecepcion() {
       {/* PASO 3: Resguardo */}
       {step === 3 && nuevaOrden && (
         <div className="bg-white rounded-xl shadow-sm p-6 space-y-6">
-          <div className="text-center mb-4">
+          <div className="text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
             <h2 className="text-xl font-bold text-gray-800">¡Recepción completada!</h2>
-            <p className="text-gray-500">Nº de orden: {nuevaOrden.orderNumber}</p>
+            <p className="text-gray-500">Nº de orden: {nuevaOrden.order_number}</p>
           </div>
 
-          {/* Resumen */}
           <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="font-medium text-gray-700 mb-3">Resumen</h3>
+            <h3 className="font-medium mb-3">Resumen</h3>
             <div className="space-y-2 text-sm">
               <p><span className="text-gray-500">Cliente:</span> {cliente.name}</p>
               <p><span className="text-gray-500">Teléfono:</span> {cliente.phone}</p>
               <p><span className="text-gray-500">Joya:</span> {recepcion.itemType} · {recepcion.material}</p>
               <p><span className="text-gray-500">Problema:</span> {recepcion.description}</p>
-              <p><span className="text-gray-500">Fecha:</span> {new Date().toLocaleDateString()}</p>
             </div>
           </div>
 
-          {/* Opciones de impresión */}
           <div className="space-y-3">
             <button
               onClick={handlePrintClientPDF}
               className="w-full btn-primary flex items-center justify-center space-x-2 py-3"
             >
               <Printer className="w-5 h-5" />
-              <span>Imprimir resguardo para el cliente</span>
+              <span>Imprimir resguardo cliente</span>
             </button>
 
             <button
@@ -465,15 +408,7 @@ function NuevaRecepcion() {
               className="w-full btn-secondary flex items-center justify-center space-x-2 py-3"
             >
               <Copy className="w-5 h-5" />
-              <span>Imprimir copia para el taller</span>
-            </button>
-
-            <button
-              onClick={handlePrintBoth}
-              className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center justify-center space-x-2 py-3 rounded-lg transition-colors"
-            >
-              <FileText className="w-5 h-5" />
-              <span>Imprimir ambos</span>
+              <span>Imprimir copia taller</span>
             </button>
           </div>
 
@@ -481,9 +416,9 @@ function NuevaRecepcion() {
             <button
               onClick={() => {
                 setStep(1);
-                setCliente({ id: '', name: '', phone: '', email: '', address: '' });
-                setRecepcion({ itemType: '', material: '', description: '', observations: '', photos: [] });
-                setFotos([]);
+                setSelectedClient(null);
+                setCliente({ name: '', phone: '', email: '', address: '' });
+                setRecepcion({ itemType: '', material: '', description: '', observations: '' });
                 setNuevaOrden(null);
               }}
               className="btn-secondary"
@@ -499,22 +434,6 @@ function NuevaRecepcion() {
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes slide-down {
-          from {
-            transform: translateY(-100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        .animate-slide-down {
-          animation: slide-down 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }
