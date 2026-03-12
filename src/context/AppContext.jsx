@@ -112,7 +112,53 @@ export function AppProvider({ children }) {
     };
   }, [user]);
 
-  // FUNCIONES CRUD (se mantienen igual que antes)
+  // FUNCIÓN PARA GENERAR ENLACES DE PRESUPUESTO (AHORA DECLARADA ANTES DE USARLA)
+  const generateBudgetLink = async (orderId) => {
+    try {
+      // Verificar si ya existe un token para esta orden
+      const { data: existingToken, error: checkError } = await supabase
+        .from('budget_tokens')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (checkError) throw checkError;
+
+      // Si hay un token válido no expirado, lo reusamos
+      if (existingToken && existingToken.length > 0) {
+        const token = existingToken[0];
+        if (new Date(token.expires_at) > new Date()) {
+          return {
+            token: token.token,
+            url: `${window.location.origin}/presupuesto/${token.token}`,
+            expires_at: token.expires_at
+          };
+        }
+      }
+
+      // Crear nuevo token
+      const { data: newToken, error } = await supabase
+        .from('budget_tokens')
+        .insert([{ order_id: orderId }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return {
+        token: newToken.token,
+        url: `${window.location.origin}/presupuesto/${newToken.token}`,
+        expires_at: newToken.expires_at
+      };
+
+    } catch (error) {
+      console.error('Error generating budget link:', error);
+      throw error;
+    }
+  };
+
+  // FUNCIONES CRUD
   const createClient = async (clientData) => {
     try {
       const { data, error } = await supabase
@@ -218,6 +264,7 @@ export function AppProvider({ children }) {
     createOrder,
     updateOrder,
     getStats,
+    generateBudgetLink, // AHORA ESTÁ DECLARADA ANTES
     refreshData: () => {
       fetchClients();
       fetchOrders();

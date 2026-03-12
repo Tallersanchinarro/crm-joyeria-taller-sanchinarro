@@ -35,20 +35,7 @@ function ReparacionesActivas() {
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Definir todos los estados posibles
-  const estados = [
-    'Recibido',
-    'En análisis',
-    'Presupuestado',
-    'Aceptado',
-    'En reparación',
-    'Listo',
-    'Rechazado',
-    'Entregado',
-    'Archivado'
-  ];
-
-  // Filtrar órdenes según pestaña activa (por defecto mostramos todas excepto entregadas/archivadas)
+  // Filtrar órdenes activas (no entregadas/archivadas)
   const activeOrders = orders.filter(o => 
     o.status !== 'Entregado' && 
     o.status !== 'Archivado'
@@ -57,10 +44,10 @@ function ReparacionesActivas() {
   // Aplicar filtros de búsqueda y estado
   const filteredOrders = activeOrders.filter(order => {
     const matchesSearch = 
-      order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.itemType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.clientPhone?.includes(searchTerm) ||
+      order.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.item_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.client_phone?.includes(searchTerm) ||
       order.material?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesFilter = filterStatus === 'todas' || order.status === filterStatus;
@@ -70,7 +57,7 @@ function ReparacionesActivas() {
 
   // Ordenar por fecha (más recientes primero)
   const sortedOrders = [...filteredOrders].sort((a, b) => 
-    new Date(b.createdAt) - new Date(a.createdAt)
+    new Date(b.created_at) - new Date(a.created_at)
   );
 
   const getStatusColor = (status) => {
@@ -112,8 +99,8 @@ function ReparacionesActivas() {
 
     const updates = {
       status: newStatus,
-      statusHistory: [
-        ...(selectedOrder.statusHistory || []),
+      status_history: [
+        ...(selectedOrder.status_history || []),
         {
           from: selectedOrder.status,
           to: newStatus,
@@ -125,12 +112,12 @@ function ReparacionesActivas() {
 
     // Si el estado es "Listo", registrar fecha de finalización
     if (newStatus === 'Listo') {
-      updates.completedAt = new Date().toISOString();
+      updates.completed_at = new Date().toISOString();
     }
 
     // Si el estado es "Rechazado" o "Archivado", registrar fecha
     if (newStatus === 'Rechazado' || newStatus === 'Archivado') {
-      updates.archivedAt = new Date().toISOString();
+      updates.archived_at = new Date().toISOString();
     }
 
     // Actualizar la orden
@@ -170,10 +157,10 @@ function ReparacionesActivas() {
 
     const updates = {
       status: 'Entregado',
-      deliveredAt: new Date().toISOString(),
+      delivered_at: new Date().toISOString(),
       paid: true,
-      statusHistory: [
-        ...(selectedOrder.statusHistory || []),
+      status_history: [
+        ...(selectedOrder.status_history || []),
         {
           from: selectedOrder.status,
           to: 'Entregado',
@@ -199,9 +186,18 @@ function ReparacionesActivas() {
   };
 
   const handlePrintReceipt = (order) => {
-    const client = clients.find(c => c.id === order.clientId);
+    // Buscar el cliente completo para tener todos sus datos
+    const client = clients.find(c => c.id === order.client_id);
     if (client) {
-      generateReceptionPDF(order, client, {}, true);
+      generateReceptionPDF(order, client, 'cliente');
+    } else {
+      // Si no encontramos el cliente, usamos los datos de la orden
+      const clientData = {
+        name: order.client_name,
+        phone: order.client_phone,
+        email: order.client_email
+      };
+      generateReceptionPDF(order, clientData, 'cliente');
     }
   };
 
@@ -299,7 +295,7 @@ function ReparacionesActivas() {
                 </tr>
               ) : (
                 sortedOrders.map((order) => {
-                  const isOverdue = order.estimatedDate && new Date(order.estimatedDate) < new Date() && order.status !== 'Listo' && order.status !== 'Entregado';
+                  const isOverdue = order.estimated_date && new Date(order.estimated_date) < new Date() && order.status !== 'Listo' && order.status !== 'Entregado';
                   const isReady = order.status === 'Listo';
                   const isRejected = order.status === 'Rechazado';
                   
@@ -313,7 +309,7 @@ function ReparacionesActivas() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <span className={`font-mono text-sm font-medium ${isRejected ? 'text-gray-500' : 'text-gray-900'}`}>
-                            {order.orderNumber || order.id.slice(-6)}
+                            {order.order_number || order.id.slice(-6)}
                           </span>
                           {isOverdue && (
                             <AlertCircle className="w-4 h-4 text-red-500 ml-2" title="Retrasado" />
@@ -326,10 +322,12 @@ function ReparacionesActivas() {
                             <User className={`h-4 w-4 ${isRejected ? 'text-gray-500' : 'text-primary-600'}`} />
                           </div>
                           <div className="ml-3">
-                            <p className={`text-sm font-medium ${isRejected ? 'text-gray-500' : 'text-gray-900'}`}>{order.clientName}</p>
+                            <p className={`text-sm font-medium ${isRejected ? 'text-gray-500' : 'text-gray-900'}`}>
+                              {order.client_name}
+                            </p>
                             <p className={`text-xs flex items-center ${isRejected ? 'text-gray-400' : 'text-gray-500'}`}>
                               <Phone className="w-3 h-3 mr-1" />
-                              {order.clientPhone}
+                              {order.client_phone}
                             </p>
                           </div>
                         </div>
@@ -337,7 +335,7 @@ function ReparacionesActivas() {
                       <td className="px-6 py-4">
                         <div>
                           <p className={`text-sm font-medium ${isRejected ? 'text-gray-500' : 'text-gray-900'}`}>
-                            {order.itemType || 'Joya'}
+                            {order.item_type || 'Joya'}
                           </p>
                           <p className={`text-xs line-clamp-1 ${isRejected ? 'text-gray-400' : 'text-gray-500'}`}>
                             {order.material} · {order.description?.substring(0, 30)}...
@@ -363,7 +361,7 @@ function ReparacionesActivas() {
                         {order.budget ? (
                           <>
                             <p className={`text-sm font-bold ${isRejected ? 'text-gray-500' : 'text-gray-900'}`}>{order.budget}€</p>
-                            {order.budgetStatus === 'pendiente' && (
+                            {order.budget_status === 'pendiente' && (
                               <p className="text-xs text-amber-600">Pendiente</p>
                             )}
                           </>
@@ -374,7 +372,7 @@ function ReparacionesActivas() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className={`flex items-center text-xs ${isRejected ? 'text-gray-400' : 'text-gray-500'}`}>
                           <Calendar className="w-3 h-3 mr-1" />
-                          <span>Entrada: {new Date(order.createdAt).toLocaleDateString()}</span>
+                          <span>Entrada: {new Date(order.created_at).toLocaleDateString()}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -405,7 +403,7 @@ function ReparacionesActivas() {
                             </button>
                           )}
 
-                          {order.budgetStatus === 'pendiente' && order.budget && (
+                          {order.budget_status === 'pendiente' && order.budget && (
                             <button
                               onClick={() => handleMarkAsRejected(order)}
                               className="p-1 hover:bg-red-100 rounded-lg transition-colors"
@@ -439,9 +437,9 @@ function ReparacionesActivas() {
             <div className="p-6 space-y-4">
               {/* Información de la orden */}
               <div className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-sm font-medium text-gray-800">{selectedOrder.clientName}</p>
-                <p className="text-xs text-gray-600">{selectedOrder.itemType} · {selectedOrder.material}</p>
-                <p className="text-xs text-gray-500 mt-1">Orden: {selectedOrder.orderNumber}</p>
+                <p className="text-sm font-medium text-gray-800">{selectedOrder.client_name}</p>
+                <p className="text-xs text-gray-600">{selectedOrder.item_type} · {selectedOrder.material}</p>
+                <p className="text-xs text-gray-500 mt-1">Orden: {selectedOrder.order_number}</p>
               </div>
 
               {/* Selector de estado */}
@@ -509,11 +507,11 @@ function ReparacionesActivas() {
               )}
 
               {/* Historial de cambios */}
-              {selectedOrder.statusHistory && selectedOrder.statusHistory.length > 0 && (
+              {selectedOrder.status_history && selectedOrder.status_history.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-gray-500 mb-2">Últimos cambios:</p>
                   <div className="space-y-1 max-h-24 overflow-y-auto">
-                    {selectedOrder.statusHistory.slice(-3).map((change, idx) => (
+                    {selectedOrder.status_history.slice(-3).map((change, idx) => (
                       <div key={idx} className="text-xs text-gray-600">
                         <span className="text-gray-400">{new Date(change.date).toLocaleDateString()}:</span>
                         {change.from} → {change.to}

@@ -21,20 +21,20 @@ function Historial() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMonth, setFilterMonth] = useState('all');
 
-  // Solo órdenes entregadas o rechazadas
+  // Solo órdenes entregadas (quitamos Rechazado del historial principal)
   const completedOrders = orders.filter(o => 
-    o.status === 'Entregado' || o.status === 'Rechazado'
+    o.status === 'Entregado'
   );
 
   // Aplicar filtros
   const filteredOrders = completedOrders.filter(order => {
     const matchesSearch = 
-      order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.itemType?.toLowerCase().includes(searchTerm.toLowerCase());
+      order.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.item_type?.toLowerCase().includes(searchTerm.toLowerCase());
 
     if (filterMonth !== 'all') {
-      const orderDate = new Date(order.completedAt || order.createdAt);
+      const orderDate = new Date(order.delivered_at || order.completed_at || order.created_at);
       const now = new Date();
       const monthsDiff = (now.getFullYear() - orderDate.getFullYear()) * 12 + 
                         (now.getMonth() - orderDate.getMonth());
@@ -48,14 +48,14 @@ function Historial() {
     return matchesSearch;
   });
 
-  // Ordenar por fecha (más reciente primero)
+  // Ordenar por fecha de entrega (más reciente primero)
   const sortedOrders = [...filteredOrders].sort((a, b) => 
-    new Date(b.completedAt || b.createdAt) - new Date(a.completedAt || a.createdAt)
+    new Date(b.delivered_at || b.completed_at || b.created_at) - 
+    new Date(a.delivered_at || a.completed_at || a.created_at)
   );
 
   // Calcular totales
   const totalRevenue = completedOrders
-    .filter(o => o.status === 'Entregado')
     .reduce((sum, o) => sum + (o.budget || 0), 0);
 
   const totalRepairs = completedOrders.length;
@@ -133,7 +133,7 @@ function Historial() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha entrega</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Orden</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Joya</th>
@@ -143,7 +143,8 @@ function Historial() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {sortedOrders.map((order) => {
-                  const completedDate = new Date(order.completedAt || order.deliveredAt || order.createdAt);
+                  // Usar delivered_at si existe, si no completed_at, si no created_at
+                  const deliveredDate = order.delivered_at || order.completed_at || order.created_at;
                   
                   return (
                     <tr 
@@ -154,12 +155,12 @@ function Historial() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center text-sm text-gray-600">
                           <Calendar className="w-4 h-4 mr-2 text-gray-400" />
-                          {completedDate.toLocaleDateString()}
+                          {new Date(deliveredDate).toLocaleDateString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="font-mono text-sm text-gray-900">
-                          {order.orderNumber || order.id.slice(-6)}
+                          {order.order_number || order.id.slice(-6)}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -168,17 +169,17 @@ function Historial() {
                             <User className="h-4 w-4 text-gray-600" />
                           </div>
                           <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-900">{order.clientName}</p>
+                            <p className="text-sm font-medium text-gray-900">{order.client_name}</p>
                             <p className="text-xs text-gray-500 flex items-center">
                               <Phone className="w-3 h-3 mr-1" />
-                              {order.clientPhone}
+                              {order.client_phone}
                             </p>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div>
-                          <p className="text-sm text-gray-900">{order.itemType}</p>
+                          <p className="text-sm text-gray-900">{order.item_type}</p>
                           <p className="text-xs text-gray-500">{order.material}</p>
                         </div>
                       </td>
@@ -190,11 +191,7 @@ function Historial() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          order.status === 'Entregado' 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-gray-100 text-gray-700'
-                        }`}>
+                        <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">
                           {order.status}
                         </span>
                       </td>

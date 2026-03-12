@@ -11,13 +11,15 @@ import DetalleReparacion from './pages/DetalleReparacion';
 import ReparacionesActivas from './pages/ReparacionesActivas';
 import Historial from './pages/Historial';
 import Clientes from './pages/Clientes';
+import PresupuestoPublico from './pages/PresupuestoPublico'; // AÑADIDO
 
 function App() {
   return (
     <AppProvider>
       <Routes>
-        {/* Única ruta pública */}
+        {/* Rutas públicas */}
         <Route path="/login" element={<Login />} />
+        <Route path="/presupuesto/:token" element={<PresupuestoPublico />} /> {/* AÑADIDO */}
         
         {/* Todas las demás rutas son privadas */}
         <Route

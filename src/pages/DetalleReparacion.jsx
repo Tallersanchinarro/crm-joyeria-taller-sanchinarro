@@ -1,3 +1,4 @@
+// import PhotoGallery from '../components/orders/PhotoGallery';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -26,20 +27,21 @@ import {
   ThumbsUp,
   ThumbsDown,
   Wrench,
-  Settings
+  Settings,
+  Link as LinkIcon // AÑADIDO
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { generateReceptionPDF } from '../utils/pdfGenerator'; // CAMBIADO AQUÍ
+import { generateReceptionPDF } from '../utils/pdfGenerator';
 
 function DetalleReparacion() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { orders, clients, updateOrder } = useApp();
+  const { orders, clients, updateOrder, generateBudgetLink } = useApp(); // AÑADIDO generateBudgetLink
   
   const [order, setOrder] = useState(null);
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('diagnosis'); // diagnosis, budget, tracking
+  const [activeTab, setActiveTab] = useState('diagnosis');
   const [diagnosis, setDiagnosis] = useState({
     works: [],
     materials: [],
@@ -57,6 +59,11 @@ function DetalleReparacion() {
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  
+  // NUEVOS ESTADOS PARA ENLACES
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [budgetLink, setBudgetLink] = useState(null);
+  const [copySuccess, setCopySuccess] = useState('');
 
   // Cargar datos
   useEffect(() => {
@@ -64,7 +71,7 @@ function DetalleReparacion() {
       const foundOrder = orders.find(o => o.id === id);
       if (foundOrder) {
         setOrder(foundOrder);
-        const foundClient = clients.find(c => c.id === foundOrder.clientId);
+        const foundClient = clients.find(c => c.id === foundOrder.client_id);
         setClient(foundClient);
         
         // Cargar diagnóstico si existe
@@ -76,10 +83,10 @@ function DetalleReparacion() {
         if (foundOrder.budget) {
           setBudget({
             total: foundOrder.budget,
-            labor: foundOrder.budgetLabor || 0,
-            materials: foundOrder.budgetMaterials || 0,
-            discount: foundOrder.budgetDiscount || 0,
-            notes: foundOrder.budgetNotes || ''
+            labor: foundOrder.budget_labor || 0,
+            materials: foundOrder.budget_materials || 0,
+            discount: foundOrder.budget_discount || 0,
+            notes: foundOrder.budget_notes || ''
           });
         }
       }
@@ -125,11 +132,33 @@ function DetalleReparacion() {
 
   // Guardar diagnóstico
   const saveDiagnosis = () => {
+    const now = new Date().toISOString();
+    
+    // Crear entrada en historial
+    const historyEntry = {
+      from: order.status,
+      to: 'En análisis',
+      date: now,
+      note: 'Diagnóstico guardado'
+    };
+    
+    const statusHistory = order.status_history || [];
+    
     updateOrder(order.id, { 
-      diagnosis,
+      diagnosis: diagnosis,
       status: 'En análisis',
-      diagnosisDate: new Date().toISOString()
+      diagnosis_date: now,
+      status_history: [...statusHistory, historyEntry]
     });
+    
+    // Actualizar estado local
+    setOrder({
+      ...order,
+      diagnosis: diagnosis,
+      status: 'En análisis',
+      diagnosis_date: now
+    });
+    
     setSuccessMessage('Diagnóstico guardado correctamente');
     setShowSuccessMessage(true);
     setTimeout(() => setShowSuccessMessage(false), 3000);
@@ -138,7 +167,7 @@ function DetalleReparacion() {
   // Calcular presupuesto
   const calculateBudget = () => {
     const materialsTotal = diagnosis.materials.reduce((sum, m) => sum + (m.price * m.quantity), 0);
-    const laborTotal = diagnosis.works.reduce((sum, w) => sum + (w.estimatedHours * 25), 0); // 25€/hora
+    const laborTotal = diagnosis.works.reduce((sum, w) => sum + (w.estimatedHours * 25), 0);
     const total = laborTotal + materialsTotal;
     
     setBudget({
@@ -151,15 +180,43 @@ function DetalleReparacion() {
 
   // Guardar y enviar presupuesto
   const saveAndSendBudget = () => {
+    const now = new Date().toISOString();
+    
+    // Crear entrada en historial
+    const historyEntry = {
+      from: order.status,
+      to: 'Presupuestado',
+      date: now,
+      note: 'Presupuesto generado'
+    };
+    
+    const statusHistory = order.status_history || [];
+    
     updateOrder(order.id, {
+      diagnosis: diagnosis,
       budget: budget.total,
-      budgetLabor: budget.labor,
-      budgetMaterials: budget.materials,
-      budgetDiscount: budget.discount,
-      budgetNotes: budget.notes,
-      budgetStatus: 'pendiente',
+      budget_labor: budget.labor,
+      budget_materials: budget.materials,
+      budget_discount: budget.discount,
+      budget_notes: budget.notes,
+      budget_status: 'pendiente',
       status: 'Presupuestado',
-      budgetDate: new Date().toISOString()
+      budget_date: now,
+      status_history: [...statusHistory, historyEntry]
+    });
+    
+    // Actualizar estado local
+    setOrder({
+      ...order,
+      diagnosis: diagnosis,
+      budget: budget.total,
+      budget_labor: budget.labor,
+      budget_materials: budget.materials,
+      budget_discount: budget.discount,
+      budget_notes: budget.notes,
+      budget_status: 'pendiente',
+      status: 'Presupuestado',
+      budget_date: now
     });
     
     setShowBudgetModal(false);
@@ -170,11 +227,31 @@ function DetalleReparacion() {
 
   // Cambiar estado según respuesta del cliente
   const handleClientResponse = (response) => {
+    const now = new Date().toISOString();
     const newStatus = response === 'aceptado' ? 'Aceptado' : 'Rechazado';
+    
+    // Crear entrada en historial
+    const historyEntry = {
+      from: order.status,
+      to: newStatus,
+      date: now,
+      note: `Cliente ${response === 'aceptado' ? 'acepta' : 'rechaza'} presupuesto`
+    };
+    
+    const statusHistory = order.status_history || [];
+    
     updateOrder(order.id, {
       status: newStatus,
-      budgetStatus: response,
-      responseDate: new Date().toISOString()
+      budget_status: response,
+      response_date: now,
+      status_history: [...statusHistory, historyEntry]
+    });
+    
+    // Actualizar estado local
+    setOrder({
+      ...order,
+      status: newStatus,
+      budget_status: response
     });
     
     setSuccessMessage(`Cliente ha ${response === 'aceptado' ? 'ACEPTADO' : 'RECHAZADO'} el presupuesto`);
@@ -184,7 +261,31 @@ function DetalleReparacion() {
 
   // Iniciar reparación
   const startRepair = () => {
-    updateOrder(order.id, { status: 'En reparación', startDate: new Date().toISOString() });
+    const now = new Date().toISOString();
+    
+    // Crear entrada en historial
+    const historyEntry = {
+      from: order.status,
+      to: 'En reparación',
+      date: now,
+      note: 'Inicio de reparación'
+    };
+    
+    const statusHistory = order.status_history || [];
+    
+    updateOrder(order.id, { 
+      status: 'En reparación', 
+      start_date: now,
+      status_history: [...statusHistory, historyEntry]
+    });
+    
+    // Actualizar estado local
+    setOrder({
+      ...order,
+      status: 'En reparación',
+      start_date: now
+    });
+    
     setSuccessMessage('Reparación iniciada');
     setShowSuccessMessage(true);
     setTimeout(() => setShowSuccessMessage(false), 3000);
@@ -192,7 +293,31 @@ function DetalleReparacion() {
 
   // Marcar como listo
   const markAsReady = () => {
-    updateOrder(order.id, { status: 'Listo', readyDate: new Date().toISOString() });
+    const now = new Date().toISOString();
+    
+    // Crear entrada en historial
+    const historyEntry = {
+      from: order.status,
+      to: 'Listo',
+      date: now,
+      note: 'Reparación finalizada'
+    };
+    
+    const statusHistory = order.status_history || [];
+    
+    updateOrder(order.id, { 
+      status: 'Listo', 
+      completed_at: now,
+      status_history: [...statusHistory, historyEntry]
+    });
+    
+    // Actualizar estado local
+    setOrder({
+      ...order,
+      status: 'Listo',
+      completed_at: now
+    });
+    
     setSuccessMessage('Reparación lista para entregar');
     setShowSuccessMessage(true);
     setTimeout(() => setShowSuccessMessage(false), 3000);
@@ -200,11 +325,33 @@ function DetalleReparacion() {
 
   // Marcar como entregado
   const markAsDelivered = () => {
+    const now = new Date().toISOString();
+    
+    // Crear entrada en historial
+    const historyEntry = {
+      from: order.status,
+      to: 'Entregado',
+      date: now,
+      note: 'Entregado al cliente'
+    };
+    
+    const statusHistory = order.status_history || [];
+    
     updateOrder(order.id, { 
       status: 'Entregado', 
-      deliveredDate: new Date().toISOString(),
+      delivered_at: now,
+      paid: true,
+      status_history: [...statusHistory, historyEntry]
+    });
+    
+    // Actualizar estado local
+    setOrder({
+      ...order,
+      status: 'Entregado',
+      delivered_at: now,
       paid: true
     });
+    
     setSuccessMessage('Reparación entregada al cliente');
     setShowSuccessMessage(true);
     setTimeout(() => {
@@ -212,13 +359,38 @@ function DetalleReparacion() {
     }, 2000);
   };
 
-  // Generar PDF - AHORA USA generateReceptionPDF
+  // Generar PDF
   const generatePDF = (type) => {
     if (order && client) {
-      // type === 'budget' ? 'taller' : 'cliente'
       const pdfType = type === 'budget' ? 'taller' : 'cliente';
-      generateReceptionPDF(order, client, pdfType);
+      const orderForPDF = {
+        ...order,
+        order_number: order.order_number,
+        item_type: order.item_type,
+        client_name: client.name,
+        client_phone: client.phone,
+        created_at: order.created_at
+      };
+      generateReceptionPDF(orderForPDF, client, pdfType);
     }
+  };
+
+  // NUEVA FUNCIÓN: Generar enlace para el cliente
+  const handleGenerateLink = async () => {
+    try {
+      const link = await generateBudgetLink(order.id);
+      setBudgetLink(link);
+      setShowLinkModal(true);
+    } catch (error) {
+      alert('Error al generar enlace: ' + error.message);
+    }
+  };
+
+  // NUEVA FUNCIÓN: Copiar enlace al portapapeles
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(budgetLink.url);
+    setCopySuccess('¡Copiado!');
+    setTimeout(() => setCopySuccess(''), 3000);
   };
 
   if (loading) {
@@ -266,19 +438,19 @@ function DetalleReparacion() {
             <div>
               <div className="flex items-center space-x-3">
                 <h1 className="text-2xl font-bold text-gray-800">
-                  Reparación #{order.orderNumber}
+                  Reparación #{order.order_number}
                 </h1>
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
                   {order.status}
                 </span>
               </div>
               <p className="text-sm text-gray-500">
-                Recibida: {new Date(order.createdAt).toLocaleDateString()}
+                Recibida: {new Date(order.created_at).toLocaleDateString()}
               </p>
             </div>
           </div>
 
-          {/* Acciones según estado */}
+          {/* Acciones según estado - AÑADIDO BOTÓN ENLACE */}
           <div className="flex items-center space-x-2">
             {order.status === 'Recibido' && (
               <button
@@ -305,6 +477,14 @@ function DetalleReparacion() {
                 >
                   <ThumbsDown className="w-4 h-4" />
                   <span>Cliente rechaza</span>
+                </button>
+                {/* NUEVO BOTÓN DE ENLACE */}
+                <button
+                  onClick={handleGenerateLink}
+                  className="btn-secondary flex items-center space-x-2"
+                >
+                  <LinkIcon className="w-4 h-4" />
+                  <span>Enlace</span>
                 </button>
               </>
             )}
@@ -384,7 +564,7 @@ function DetalleReparacion() {
         </div>
       </div>
 
-      {/* Información del cliente (siempre visible) */}
+      {/* Información del cliente */}
       <div className="bg-white rounded-xl shadow-sm p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -407,13 +587,26 @@ function DetalleReparacion() {
               </div>
             </div>
           </div>
-          <button className="text-primary-600 hover:text-primary-700 text-sm font-medium">
-            Editar cliente
-          </button>
         </div>
       </div>
+      
+      {/* 
+  // FOTOS DE LA JOYA (DESACTIVADO - Supabase Storage)
+  // Para activar: descomentar y importar PhotoGallery
+  
+  <div className="bg-white rounded-xl shadow-sm p-6">
+    <PhotoGallery 
+      orderId={order.id} 
+      existingPhotos={order.photos || []} 
+      onPhotosChange={(newPhotos) => {
+        setOrder({...order, photos: newPhotos});
+      }}
+    />
+  </div>
+*/}
 
-      {/* TAB 1: DIAGNÓSTICO Y ANÁLISIS */}
+
+      {/* TAB 1: DIAGNÓSTICO */}
       {activeTab === 'diagnosis' && (
         <div className="bg-white rounded-xl shadow-sm p-6 space-y-6">
           <div className="flex items-center justify-between">
@@ -444,7 +637,7 @@ function DetalleReparacion() {
                   type="text"
                   value={newWork}
                   onChange={(e) => setNewWork(e.target.value)}
-                  placeholder="Ej: Reengarzar piedra, Soldadura, Limpieza..."
+                  placeholder="Ej: Reengarzar piedra, Soldadura..."
                   className="flex-1 input-field text-sm"
                 />
                 <button
@@ -472,7 +665,7 @@ function DetalleReparacion() {
                   </div>
                 </div>
               ))}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 <input
                   type="text"
                   value={newMaterial.name}
@@ -494,12 +687,12 @@ function DetalleReparacion() {
                   onChange={(e) => setNewMaterial({...newMaterial, price: parseFloat(e.target.value)})}
                   min="0"
                   step="0.01"
-                  placeholder="Precio"
+                  placeholder="€"
                   className="input-field text-sm"
                 />
                 <button
                   onClick={addMaterial}
-                  className="btn-secondary col-span-3"
+                  className="btn-secondary col-span-4"
                 >
                   <Plus className="w-4 h-4 mr-1 inline" />
                   Añadir material
@@ -508,21 +701,21 @@ function DetalleReparacion() {
             </div>
           </div>
 
-          {/* Observaciones del joyero */}
+          {/* Observaciones */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Observaciones del joyero
+              Observaciones
             </label>
             <textarea
               value={diagnosis.observations}
               onChange={(e) => setDiagnosis({...diagnosis, observations: e.target.value})}
               rows="3"
               className="input-field"
-              placeholder="Notas internas sobre el estado de la pieza..."
+              placeholder="Notas internas..."
             />
           </div>
 
-          {/* Botón para generar presupuesto */}
+          {/* Botón presupuesto */}
           {(diagnosis.works.length > 0 || diagnosis.materials.length > 0) && (
             <div className="pt-4 border-t">
               <button
@@ -551,16 +744,16 @@ function DetalleReparacion() {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Mano de obra:</span>
-                    <span className="font-medium">{order.budgetLabor || 0}€</span>
+                    <span className="font-medium">{order.budget_labor || 0}€</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Materiales:</span>
-                    <span className="font-medium">{order.budgetMaterials || 0}€</span>
+                    <span className="font-medium">{order.budget_materials || 0}€</span>
                   </div>
-                  {order.budgetDiscount > 0 && (
+                  {order.budget_discount > 0 && (
                     <div className="flex justify-between text-red-600">
                       <span>Descuento:</span>
-                      <span>-{order.budgetDiscount}€</span>
+                      <span>-{order.budget_discount}€</span>
                     </div>
                   )}
                   <div className="flex justify-between pt-2 border-t text-lg font-bold">
@@ -570,21 +763,21 @@ function DetalleReparacion() {
                 </div>
               </div>
 
-              {order.budgetNotes && (
+              {order.budget_notes && (
                 <div className="bg-blue-50 p-3 rounded-lg">
-                  <p className="text-sm text-blue-800">{order.budgetNotes}</p>
+                  <p className="text-sm text-blue-800">{order.budget_notes}</p>
                 </div>
               )}
 
               <div className="flex items-center justify-between">
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  order.budgetStatus === 'aceptado' ? 'bg-green-100 text-green-700' :
-                  order.budgetStatus === 'rechazado' ? 'bg-red-100 text-red-700' :
+                  order.budget_status === 'aceptado' ? 'bg-green-100 text-green-700' :
+                  order.budget_status === 'rechazado' ? 'bg-red-100 text-red-700' :
                   'bg-yellow-100 text-yellow-700'
                 }`}>
-                  {order.budgetStatus === 'aceptado' ? '✓ Aceptado' :
-                   order.budgetStatus === 'rechazado' ? '✗ Rechazado' :
-                   '⏳ Pendiente de respuesta'}
+                  {order.budget_status === 'aceptado' ? '✓ Aceptado' :
+                   order.budget_status === 'rechazado' ? '✗ Rechazado' :
+                   '⏳ Pendiente'}
                 </span>
 
                 <button
@@ -618,44 +811,47 @@ function DetalleReparacion() {
 
           {/* Timeline */}
           <div className="space-y-4">
+            {/* Recibida */}
             <div className="flex items-start space-x-3">
               <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
                 <Package className="w-3 h-3 text-purple-600" />
               </div>
               <div>
                 <p className="font-medium text-gray-800">Recibida en taller</p>
-                <p className="text-sm text-gray-500">{new Date(order.createdAt).toLocaleString()}</p>
+                <p className="text-sm text-gray-500">{new Date(order.created_at).toLocaleString()}</p>
               </div>
             </div>
 
-            {order.diagnosisDate && (
+            {/* Diagnóstico */}
+            {order.diagnosis_date && (
               <div className="flex items-start space-x-3">
                 <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
                   <Settings className="w-3 h-3 text-blue-600" />
                 </div>
                 <div>
                   <p className="font-medium text-gray-800">Análisis realizado</p>
-                  <p className="text-sm text-gray-500">{new Date(order.diagnosisDate).toLocaleString()}</p>
+                  <p className="text-sm text-gray-500">{new Date(order.diagnosis_date).toLocaleString()}</p>
                 </div>
               </div>
             )}
 
-            {order.budgetDate && (
+            {/* Presupuesto */}
+            {order.budget_date && (
               <div className="flex items-start space-x-3">
                 <div className="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
                   <DollarSign className="w-3 h-3 text-yellow-600" />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-800">Presupuesto enviado</p>
-                  <p className="text-sm text-gray-500">{new Date(order.budgetDate).toLocaleString()}</p>
-                  {order.budgetStatus && (
+                  <p className="font-medium text-gray-800">Presupuesto generado</p>
+                  <p className="text-sm text-gray-500">{new Date(order.budget_date).toLocaleString()}</p>
+                  {order.budget_status && (
                     <span className={`inline-block mt-1 text-xs px-2 py-1 rounded-full ${
-                      order.budgetStatus === 'aceptado' ? 'bg-green-100 text-green-700' :
-                      order.budgetStatus === 'rechazado' ? 'bg-red-100 text-red-700' :
+                      order.budget_status === 'aceptado' ? 'bg-green-100 text-green-700' :
+                      order.budget_status === 'rechazado' ? 'bg-red-100 text-red-700' :
                       'bg-yellow-100 text-yellow-700'
                     }`}>
-                      {order.budgetStatus === 'aceptado' ? 'Aceptado' :
-                       order.budgetStatus === 'rechazado' ? 'Rechazado' :
+                      {order.budget_status === 'aceptado' ? 'Aceptado' :
+                       order.budget_status === 'rechazado' ? 'Rechazado' :
                        'Pendiente'}
                     </span>
                   )}
@@ -663,38 +859,61 @@ function DetalleReparacion() {
               </div>
             )}
 
-            {order.startDate && (
+            {/* Inicio reparación */}
+            {order.start_date && (
               <div className="flex items-start space-x-3">
                 <div className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
                   <Wrench className="w-3 h-3 text-orange-600" />
                 </div>
                 <div>
                   <p className="font-medium text-gray-800">Reparación iniciada</p>
-                  <p className="text-sm text-gray-500">{new Date(order.startDate).toLocaleString()}</p>
+                  <p className="text-sm text-gray-500">{new Date(order.start_date).toLocaleString()}</p>
                 </div>
               </div>
             )}
 
-            {order.readyDate && (
+            {/* Completada */}
+            {order.completed_at && (
               <div className="flex items-start space-x-3">
                 <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
                   <CheckCircle className="w-3 h-3 text-green-600" />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-800">Lista para entregar</p>
-                  <p className="text-sm text-gray-500">{new Date(order.readyDate).toLocaleString()}</p>
+                  <p className="font-medium text-gray-800">Reparación finalizada</p>
+                  <p className="text-sm text-gray-500">{new Date(order.completed_at).toLocaleString()}</p>
                 </div>
               </div>
             )}
 
-            {order.deliveredDate && (
+            {/* Entregada */}
+            {order.delivered_at && (
               <div className="flex items-start space-x-3">
                 <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
                   <Package className="w-3 h-3 text-gray-600" />
                 </div>
                 <div>
                   <p className="font-medium text-gray-800">Entregada al cliente</p>
-                  <p className="text-sm text-gray-500">{new Date(order.deliveredDate).toLocaleString()}</p>
+                  <p className="text-sm text-gray-500">{new Date(order.delivered_at).toLocaleString()}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Historial adicional */}
+            {order.status_history && order.status_history.length > 0 && (
+              <div className="mt-6 pt-4 border-t">
+                <h3 className="font-medium text-gray-700 mb-3">Historial completo</h3>
+                <div className="space-y-2">
+                  {order.status_history.map((entry, idx) => (
+                    <div key={idx} className="text-xs flex items-start space-x-2 bg-gray-50 p-2 rounded">
+                      <span className="text-gray-400 whitespace-nowrap">
+                        {new Date(entry.date).toLocaleDateString()}:
+                      </span>
+                      <span>
+                        {entry.from} → {entry.to}
+                        {entry.note && <span className="text-gray-500 ml-1">({entry.note})</span>}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -726,7 +945,6 @@ function DetalleReparacion() {
                   <input
                     type="number"
                     value={budget.labor}
-                    onChange={(e) => setBudget({...budget, labor: parseFloat(e.target.value)})}
                     className="input-field"
                     readOnly
                   />
@@ -739,7 +957,6 @@ function DetalleReparacion() {
                   <input
                     type="number"
                     value={budget.materials}
-                    onChange={(e) => setBudget({...budget, materials: parseFloat(e.target.value)})}
                     className="input-field"
                     readOnly
                   />
@@ -777,7 +994,7 @@ function DetalleReparacion() {
                     onChange={(e) => setBudget({...budget, notes: e.target.value})}
                     rows="3"
                     className="input-field"
-                    placeholder="Incluir información adicional sobre el presupuesto..."
+                    placeholder="Información adicional..."
                   />
                 </div>
               </div>
@@ -796,6 +1013,72 @@ function DetalleReparacion() {
               >
                 <Send className="w-4 h-4" />
                 <span>Guardar y enviar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NUEVO MODAL DE ENLACE */}
+      {showLinkModal && budgetLink && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold">Enlace para el cliente</h3>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <p className="text-sm text-blue-800 mb-2">
+                  Comparte este enlace con tu cliente por WhatsApp:
+                </p>
+                <div className="bg-white p-3 rounded border text-sm break-all">
+                  {budgetLink.url}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500 flex items-center">
+                  <Clock className="w-4 h-4 mr-1" />
+                  Válido hasta: {new Date(budgetLink.expires_at).toLocaleDateString()}
+                </span>
+                <button
+                  onClick={copyToClipboard}
+                  className="text-primary-600 hover:text-primary-700 font-medium"
+                >
+                  {copySuccess || 'Copiar'}
+                </button>
+              </div>
+
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-gray-600">
+                  📱 El cliente podrá abrir el enlace sin necesidad de login
+                  y aceptar o rechazar el presupuesto directamente.
+                </p>
+              </div>
+
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(
+                  `Hola, aquí tienes el presupuesto para tu joya:\n${budgetLink.url}`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full bg-green-600 text-white text-center py-3 rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Abrir WhatsApp
+              </a>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowLinkModal(false);
+                  setBudgetLink(null);
+                  setCopySuccess('');
+                }}
+                className="btn-primary"
+              >
+                Cerrar
               </button>
             </div>
           </div>

@@ -14,3 +14,14 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+
+## 📷 FOTOS DE JOYAS (Supabase Storage)
+
+Las funciones están preparadas pero **DESACTIVADAS** para no consumir recursos del plan gratis.
+
+### Para activar:
+
+1. **Ejecutar SQL en Supabase** (crea el bucket)
+```sql
+-- (el SQL del paso 1)

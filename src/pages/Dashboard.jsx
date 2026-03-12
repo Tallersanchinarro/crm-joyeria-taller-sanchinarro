@@ -80,7 +80,7 @@ function Dashboard() {
     { label: 'Para entregar', value: stats.readyForPickup, color: 'green' }
   ];
 
-  // Alertas principales
+  // Alertas principales (solo si hay valores > 0)
   const alerts = [
     stats.pendingBudget > 0 && {
       icon: FileText,
@@ -103,12 +103,12 @@ function Dashboard() {
       color: 'blue',
       path: '/reparaciones-activas?estado=analisis'
     }
-  ].filter(Boolean); // Elimina los falsos
+  ].filter(Boolean);
 
-  // Últimas órdenes
+  // Últimas órdenes (adaptado a nombres de Supabase)
   const recentOrders = orders
     .filter(o => o.status !== 'Entregado' && o.status !== 'Rechazado')
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 5);
 
   const handleOrderClick = (order) => {
@@ -223,9 +223,9 @@ function Dashboard() {
                     className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
                   >
                     <div>
-                      <p className="font-medium text-gray-800">{order.clientName}</p>
+                      <p className="font-medium text-gray-800">{order.client_name}</p>
                       <p className="text-sm text-gray-600">
-                        {order.itemType} · {order.material}
+                        {order.item_type} · {order.material}
                       </p>
                     </div>
                     <div className="text-right">
@@ -239,7 +239,7 @@ function Dashboard() {
                         {order.status}
                       </span>
                       <p className="text-xs text-gray-400 mt-1">
-                        {new Date(order.createdAt).toLocaleDateString()}
+                        {new Date(order.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
@@ -313,7 +313,7 @@ function Dashboard() {
                 <div>
                   <p className="font-medium">{selectedClient.name}</p>
                   <p className="text-sm text-gray-500">
-                    Cliente desde {new Date(selectedClient.createdAt).toLocaleDateString()}
+                    Cliente desde {new Date(selectedClient.created_at).toLocaleDateString()}
                   </p>
                 </div>
               </div>
@@ -339,7 +339,7 @@ function Dashboard() {
                 <div className="bg-gray-50 p-2 rounded text-center">
                   <p className="text-xs text-gray-500">Activas</p>
                   <p className="text-lg font-bold text-primary-600">
-                    {orders.filter(o => o.clientId === selectedClient.id && 
+                    {orders.filter(o => o.client_id === selectedClient.id && 
                       o.status !== 'Entregado' && 
                       o.status !== 'Rechazado').length}
                   </p>

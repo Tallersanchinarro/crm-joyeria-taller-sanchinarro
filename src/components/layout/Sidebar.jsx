@@ -183,7 +183,7 @@ function Sidebar() {
               {!isCollapsed && (
                 <div className="flex-1">
                   <h1 className="text-xl font-bold">
-                    <span className="text-primary-600">Orfebre</span>
+                    <span className="text-primary-600">LAM RELOJEROS</span>
                     <span className="text-gray-800">CRM</span>
                   </h1>
                   <p className="text-xs text-gray-500">Taller de Joyería</p>
