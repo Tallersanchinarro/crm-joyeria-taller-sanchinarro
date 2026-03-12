@@ -1020,70 +1020,89 @@ function DetalleReparacion() {
       )}
 
       {/* NUEVO MODAL DE ENLACE */}
-      {showLinkModal && budgetLink && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold">Enlace para el cliente</h3>
+      {/* MODAL DE ENLACE MEJORADO */}
+{showLinkModal && budgetLink && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-xl max-w-md w-full">
+      <div className="p-6 border-b border-gray-200">
+        <h3 className="text-lg font-semibold">Compartir presupuesto</h3>
+      </div>
+      
+      <div className="p-6 space-y-4">
+        {/* Información del cliente */}
+        {client && (
+          <div className="bg-gray-50 p-3 rounded-lg flex items-center space-x-3">
+            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+              <User className="w-5 h-5 text-primary-600" />
             </div>
-            
-            <div className="p-6 space-y-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <p className="text-sm text-blue-800 mb-2">
-                  Comparte este enlace con tu cliente por WhatsApp:
-                </p>
-                <div className="bg-white p-3 rounded border text-sm break-all">
-                  {budgetLink.url}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 flex items-center">
-                  <Clock className="w-4 h-4 mr-1" />
-                  Válido hasta: {new Date(budgetLink.expires_at).toLocaleDateString()}
-                </span>
-                <button
-                  onClick={copyToClipboard}
-                  className="text-primary-600 hover:text-primary-700 font-medium"
-                >
-                  {copySuccess || 'Copiar'}
-                </button>
-              </div>
-
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-xs text-gray-600">
-                  📱 El cliente podrá abrir el enlace sin necesidad de login
-                  y aceptar o rechazar el presupuesto directamente.
-                </p>
-              </div>
-
-              <a
-                href={`https://wa.me/?text=${encodeURIComponent(
-                  `Hola, aquí tienes el presupuesto para tu joya:\n${budgetLink.url}`
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full bg-green-600 text-white text-center py-3 rounded-lg hover:bg-green-700 transition-colors"
-              >
-                Abrir WhatsApp
-              </a>
-            </div>
-
-            <div className="p-6 border-t border-gray-200 flex justify-end">
-              <button
-                onClick={() => {
-                  setShowLinkModal(false);
-                  setBudgetLink(null);
-                  setCopySuccess('');
-                }}
-                className="btn-primary"
-              >
-                Cerrar
-              </button>
+            <div>
+              <p className="font-medium text-gray-800">{client.name}</p>
+              <p className="text-sm text-gray-500">{client.phone}</p>
             </div>
           </div>
+        )}
+
+        {/* Enlace generado */}
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <p className="text-sm text-blue-800 mb-2">Enlace único (válido 7 días):</p>
+          <div className="bg-white p-3 rounded border text-sm break-all font-mono">
+            {budgetLink.url}
+          </div>
         </div>
-      )}
+
+        {/* Botones de acción */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Botón copiar */}
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(budgetLink.url);
+              setCopySuccess('¡Copiado!');
+              setTimeout(() => setCopySuccess(''), 2000);
+            }}
+            className="flex items-center justify-center space-x-2 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            <span>{copySuccess || 'Copiar'}</span>
+          </button>
+
+          {/* Botón WhatsApp (usa el número del cliente) */}
+          <a
+            href={`https://wa.me/${client?.phone?.replace(/\s+/g, '')}?text=${encodeURIComponent(
+              `Hola ${client?.name}, aquí tienes el presupuesto para tu joya:\n\n` +
+              `🔗 ${budgetLink.url}\n\n` +
+              `Puedes aceptarlo o rechazarlo directamente desde el enlace.`
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center space-x-2 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Send className="w-4 h-4" />
+            <span>WhatsApp</span>
+          </a>
+        </div>
+
+        {/* Info adicional */}
+        <div className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600">
+          <p>📱 El enlace se abrirá sin necesidad de login.</p>
+          <p>⏳ Caduca el {new Date(budgetLink.expires_at).toLocaleDateString()}.</p>
+        </div>
+      </div>
+
+      <div className="p-6 border-t border-gray-200 flex justify-end">
+        <button
+          onClick={() => {
+            setShowLinkModal(false);
+            setBudgetLink(null);
+            setCopySuccess('');
+          }}
+          className="btn-primary"
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       <style jsx>{`
         @keyframes slide-down {
