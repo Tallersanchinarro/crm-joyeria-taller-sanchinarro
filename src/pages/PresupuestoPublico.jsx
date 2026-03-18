@@ -9,10 +9,17 @@ import {
   Gem,
   Phone,
   Mail,
-  DollarSign,
   ThumbsUp,
   ThumbsDown,
-  Loader
+  Loader,
+  Wrench,
+  AlertTriangle,
+  Euro,
+  Calendar,
+  User,
+  Package,
+  FileText,
+  Shield
 } from 'lucide-react';
 
 function PresupuestoPublico() {
@@ -51,6 +58,7 @@ function PresupuestoPublico() {
         .from('budget_tokens')
         .update({ 
           viewed_at: new Date().toISOString(),
+          ip_address: 'registrado', // En producción podrías obtener la IP real
           user_agent: navigator.userAgent
         })
         .eq('id', tokenData.id);
@@ -78,8 +86,8 @@ function PresupuestoPublico() {
       if (tokenData.client_action) {
         setActionTaken(true);
         setActionMessage(tokenData.client_action === 'aceptado' 
-          ? 'Ya has aceptado este presupuesto' 
-          : 'Ya has rechazado este presupuesto');
+          ? '✅ Ya has aceptado este presupuesto. Te contactaremos para comenzar la reparación.' 
+          : '❌ Ya has rechazado este presupuesto. Si cambias de opinión, contáctanos.');
       }
 
     } catch (error) {
@@ -95,8 +103,6 @@ function PresupuestoPublico() {
     setUpdating(true);
 
     try {
-      console.log('Actualizando token...', tokenInfo.id);
-      
       // 1. Actualizar el token
       const { error: tokenError } = await supabase
         .from('budget_tokens')
@@ -108,8 +114,6 @@ function PresupuestoPublico() {
 
       if (tokenError) throw tokenError;
 
-      console.log('Actualizando orden...', order.id);
-      
       // 2. Actualizar la orden
       const { error: orderError } = await supabase
         .from('ordenes')
@@ -119,30 +123,42 @@ function PresupuestoPublico() {
         })
         .eq('id', order.id);
 
-      if (orderError) {
-        console.error('Error detallado:', orderError);
-        throw new Error(orderError.message);
-      }
+      if (orderError) throw orderError;
 
       setActionTaken(true);
       setActionMessage(response === 'aceptado' 
-        ? '✅ ¡Presupuesto aceptado! En breve comenzaremos con la reparación.' 
-        : '❌ Presupuesto rechazado. Puedes contactarnos si cambias de opinión.');
+        ? '✅ ¡Presupuesto aceptado! En breve nos pondremos en contacto para comenzar la reparación.' 
+        : '❌ Presupuesto rechazado. Si tienes alguna duda, no dudes en contactarnos.');
 
     } catch (error) {
-      console.error('Error completo:', error);
-      alert('Error al procesar tu respuesta: ' + error.message);
+      console.error('Error:', error);
+      alert('Error al procesar tu respuesta. Por favor, inténtalo de nuevo o contáctanos.');
     } finally {
       setUpdating(false);
     }
   };
 
+  // Función para obtener color de gravedad
+  const getGravedadColor = (gravedad) => {
+    const colores = {
+      'baja': 'bg-green-100 text-green-700',
+      'media': 'bg-yellow-100 text-yellow-700',
+      'alta': 'bg-orange-100 text-orange-700',
+      'critica': 'bg-red-100 text-red-700'
+    };
+    return colores[gravedad] || 'bg-gray-100 text-gray-700';
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
-          <Loader className="w-12 h-12 animate-spin text-primary-600 mx-auto mb-4" />
-          <p className="text-gray-600">Cargando presupuesto...</p>
+          <div className="relative">
+            <div className="animate-spin rounded-full h-20 w-20 border-4 border-primary-200 border-t-primary-600 mx-auto mb-6"></div>
+            <Gem className="w-8 h-8 text-primary-600 absolute top-6 left-1/2 transform -translate-x-1/2" />
+          </div>
+          <p className="text-gray-600 text-lg">Cargando presupuesto...</p>
+          <p className="text-sm text-gray-400 mt-2">Por favor, espera un momento</p>
         </div>
       </div>
     );
@@ -150,14 +166,16 @@ function PresupuestoPublico() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-8 text-center">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Error</h1>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="w-10 h-10 text-red-500" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-3">Enlace no válido</h1>
           <p className="text-gray-600 mb-6">{error}</p>
           <a 
             href="/" 
-            className="inline-block btn-primary"
+            className="inline-flex items-center px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
           >
             Volver al inicio
           </a>
@@ -167,149 +185,264 @@ function PresupuestoPublico() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-t-xl shadow-sm p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Gem className="w-8 h-8 text-primary-600" />
-              <h1 className="text-2xl font-bold text-gray-800">Presupuesto</h1>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Header con estilo profesional */}
+        <div className="bg-white rounded-t-2xl shadow-xl p-8 border-b border-gray-200">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <Gem className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-800">Presupuesto</h1>
+                <p className="text-sm text-gray-500 flex items-center mt-1">
+                  <FileText className="w-4 h-4 mr-1" />
+                  Referencia: {order?.order_number || 'N/A'}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Clock className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-500">
-                Válido hasta: {new Date(tokenInfo?.expires_at).toLocaleDateString()}
-              </span>
+            <div className="flex items-center space-x-3 bg-gray-50 px-4 py-2 rounded-xl">
+              <Clock className="w-5 h-5 text-gray-500" />
+              <div>
+                <p className="text-xs text-gray-500">Válido hasta</p>
+                <p className="font-medium text-gray-800">
+                  {new Date(tokenInfo?.expires_at).toLocaleDateString('es-ES', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  })}
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
         {actionTaken ? (
-          <div className="bg-white rounded-b-xl shadow-sm p-12 text-center">
-            {actionMessage.includes('aceptado') ? (
-              <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
-            ) : (
-              <XCircle className="w-20 h-20 text-red-500 mx-auto mb-6" />
-            )}
+          <div className="bg-white rounded-b-2xl shadow-xl p-12 text-center">
+            <div className={`w-24 h-24 ${actionMessage.includes('aceptado') ? 'bg-green-100' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-6`}>
+              {actionMessage.includes('aceptado') ? (
+                <CheckCircle className="w-12 h-12 text-green-600" />
+              ) : (
+                <XCircle className="w-12 h-12 text-red-600" />
+              )}
+            </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              {actionMessage.includes('aceptado') ? '¡Gracias!' : 'Entendido'}
+              {actionMessage.includes('aceptado') ? '¡Gracias por confiar en nosotros!' : 'Entendido'}
             </h2>
-            <p className="text-gray-600 mb-8">{actionMessage}</p>
+            <p className="text-gray-600 mb-8 max-w-md mx-auto">{actionMessage}</p>
+            <a 
+              href="/" 
+              className="inline-flex items-center px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              Volver al inicio
+            </a>
           </div>
         ) : (
-          <div className="bg-white rounded-b-xl shadow-sm p-6 space-y-6">
+          <div className="bg-white rounded-b-2xl shadow-xl p-8 space-y-6">
             
+            {/* Información del cliente */}
             {client && (
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h3 className="font-medium text-gray-700 mb-3">Tus datos</h3>
-                <p className="font-medium text-gray-900">{client.name}</p>
-                <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-                  <span className="flex items-center">
-                    <Phone className="w-4 h-4 mr-1" />
-                    {client.phone}
-                  </span>
-                  {client.email && (
-                    <span className="flex items-center">
-                      <Mail className="w-4 h-4 mr-1" />
-                      {client.email}
-                    </span>
-                  )}
+              <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-xl p-6 border border-gray-200">
+                <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
+                  <User className="w-5 h-5 mr-2 text-primary-500" />
+                  Tus datos
+                </h3>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-gray-900 text-lg">{client.name}</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-2">
+                      <span className="flex items-center text-sm text-gray-600">
+                        <Phone className="w-4 h-4 mr-1 text-gray-400" />
+                        {client.phone}
+                      </span>
+                      {client.email && (
+                        <span className="flex items-center text-sm text-gray-600">
+                          <Mail className="w-4 h-4 mr-1 text-gray-400" />
+                          {client.email}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
 
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-medium text-gray-700 mb-3">Tu joya</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-gray-500">Tipo</p>
-                  <p className="font-medium">{order.item_type}</p>
+            {/* Información de la joya */}
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-xl p-6 border border-gray-200">
+              <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
+                <Package className="w-5 h-5 mr-2 text-primary-500" />
+                Tu joya
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-1">Tipo</p>
+                  <p className="font-medium text-gray-800">{order.item_type}</p>
                 </div>
-                <div>
-                  <p className="text-xs text-gray-500">Material</p>
-                  <p className="font-medium">{order.material}</p>
+                <div className="bg-white rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-1">Material</p>
+                  <p className="font-medium text-gray-800">{order.material}</p>
                 </div>
               </div>
-              <div className="mt-3">
-                <p className="text-xs text-gray-500">Descripción</p>
-                <p className="text-sm text-gray-700">{order.description}</p>
+              <div className="mt-4 bg-white rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-1">Descripción</p>
+                <p className="text-gray-700">{order.description}</p>
               </div>
             </div>
 
-            {order.diagnosis && (
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h3 className="font-medium text-gray-700 mb-3">Trabajo necesario</h3>
-                
-                {order.diagnosis.works?.length > 0 && (
-                  <div className="mb-3">
-                    <p className="text-xs text-gray-500 mb-1">Trabajos:</p>
-                    <ul className="list-disc list-inside text-sm">
-                      {order.diagnosis.works.map((work, i) => (
-                        <li key={i}>{work.description} ({work.estimatedHours}h)</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {order.diagnosis.materials?.length > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Materiales:</p>
-                    <ul className="list-disc list-inside text-sm">
-                      {order.diagnosis.materials.map((mat, i) => (
-                        <li key={i}>{mat.name} x{mat.quantity} - {mat.price}€</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="bg-primary-50 rounded-lg p-6 border-2 border-primary-200">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-semibold text-gray-800">Total presupuesto</h3>
-                <span className="text-3xl font-bold text-primary-600">
-                  {order.budget}€
-                </span>
-              </div>
+            {/* TRABAJOS NECESARIOS - AHORA CON DATOS REALES */}
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-xl p-6 border border-gray-200">
+              <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
+                <Wrench className="w-5 h-5 mr-2 text-primary-500" />
+                Trabajos a realizar
+              </h3>
               
-              {order.budget_notes && (
-                <p className="text-sm text-gray-600 border-t border-primary-200 pt-4">
-                  📋 {order.budget_notes}
-                </p>
+              {order.trabajos && order.trabajos.length > 0 ? (
+                <div className="space-y-3">
+                  {order.trabajos.map((trabajo, index) => (
+                    <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-primary-200 transition-colors">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-start space-x-3">
+                          <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <Wrench className="w-3 h-3 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-800">{trabajo.nombre}</p>
+                            {trabajo.cantidad > 1 && (
+                              <p className="text-xs text-gray-500">Cantidad: {trabajo.cantidad}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-4 sm:space-x-6 pl-9 sm:pl-0">
+                          <div className="text-right">
+                            <p className="text-sm text-gray-500">Precio</p>
+                            <p className="font-medium text-gray-800">{trabajo.tarifa_aplicada?.toFixed(2)}€</p>
+                          </div>
+                          {trabajo.descuento > 0 && (
+                            <div className="text-right">
+                              <p className="text-sm text-gray-500">Dto.</p>
+                              <p className="font-medium text-green-600">-{trabajo.descuento}%</p>
+                            </div>
+                          )}
+                          {trabajo.cantidad > 1 && (
+                            <div className="text-right">
+                              <p className="text-sm text-gray-500">Subtotal</p>
+                              <p className="font-medium text-gray-800">{(trabajo.total || 0).toFixed(2)}€</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg p-8 text-center border-2 border-dashed border-gray-200">
+                  <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">No se han especificado trabajos</p>
+                </div>
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4 pt-4">
+            {/* FALLOS DETECTADOS */}
+            {order.fallos && order.fallos.length > 0 && (
+              <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-xl p-6 border border-gray-200">
+                <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
+                  <AlertTriangle className="w-5 h-5 mr-2 text-orange-500" />
+                  Fallos detectados
+                </h3>
+                
+                <div className="space-y-3">
+                  {order.fallos.map((fallo, index) => (
+                    <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-start space-x-3">
+                          <div className={`w-6 h-6 ${getGravedadColor(fallo.gravedad)} rounded-full flex items-center justify-center flex-shrink-0 mt-0.5`}>
+                            <AlertTriangle className="w-3 h-3" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-800">{fallo.nombre}</p>
+                            {fallo.observaciones && (
+                              <p className="text-sm text-gray-500 mt-1">📝 {fallo.observaciones}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="pl-9 sm:pl-0">
+                          <span className={`inline-block px-2 py-1 rounded-full text-xs ${getGravedadColor(fallo.gravedad)}`}>
+                            {fallo.gravedad?.charAt(0).toUpperCase() + fallo.gravedad?.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TOTAL */}
+            <div className="bg-gradient-to-br from-primary-50 to-primary-100/50 rounded-xl p-6 border-2 border-primary-200">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-primary-200 rounded-xl flex items-center justify-center">
+                    <Euro className="w-6 h-6 text-primary-700" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-primary-600 font-medium">Total presupuesto</p>
+                    <p className="text-3xl font-bold text-primary-700">{order.budget?.toFixed(2)}€</p>
+                  </div>
+                </div>
+                {order.budget_discount > 0 && (
+                  <div className="bg-white px-4 py-2 rounded-lg border border-primary-200">
+                    <p className="text-xs text-primary-600">Descuento aplicado</p>
+                    <p className="font-medium text-primary-700">-{order.budget_discount?.toFixed(2)}€</p>
+                  </div>
+                )}
+              </div>
+              
+              {order.budget_notes && (
+                <div className="mt-4 pt-4 border-t border-primary-200">
+                  <p className="text-sm text-gray-600 flex items-start">
+                    <Shield className="w-4 h-4 mr-2 text-primary-500 flex-shrink-0 mt-0.5" />
+                    <span>📋 {order.budget_notes}</span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Botones de acción */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
               <button
                 onClick={() => handleClientResponse('aceptado')}
                 disabled={updating}
-                className="bg-green-600 text-white py-4 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-2 text-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl hover:from-green-600 hover:to-green-700 transition-all transform hover:scale-[1.02] shadow-lg hover:shadow-xl flex items-center justify-center space-x-3 text-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {updating ? (
                   <Loader className="w-6 h-6 animate-spin" />
                 ) : (
                   <>
                     <ThumbsUp className="w-6 h-6" />
-                    <span>Aceptar</span>
+                    <span>Aceptar presupuesto</span>
                   </>
                 )}
               </button>
               <button
                 onClick={() => handleClientResponse('rechazado')}
                 disabled={updating}
-                className="bg-red-600 text-white py-4 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center space-x-2 text-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-gradient-to-r from-red-500 to-red-600 text-white py-4 rounded-xl hover:from-red-600 hover:to-red-700 transition-all transform hover:scale-[1.02] shadow-lg hover:shadow-xl flex items-center justify-center space-x-3 text-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {updating ? (
                   <Loader className="w-6 h-6 animate-spin" />
                 ) : (
                   <>
                     <ThumbsDown className="w-6 h-6" />
-                    <span>Rechazar</span>
+                    <span>Rechazar presupuesto</span>
                   </>
                 )}
               </button>
             </div>
+
+            <p className="text-xs text-gray-400 text-center mt-4">
+              ⚡ Al aceptar, confirmas que estás de acuerdo con el presupuesto presentado.
+            </p>
           </div>
         )}
       </div>
