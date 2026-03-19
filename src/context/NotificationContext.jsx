@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 const NotificationContext = createContext();
 
@@ -7,6 +8,7 @@ export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null); // Para mensajes flotantes (toasts)
   
   const initialLoadDone = useRef(false);
 
@@ -31,6 +33,12 @@ export function NotificationProvider({ children }) {
       console.error('Error guardando en localStorage:', e);
     }
   }, [readIds]);
+
+  // Función para mostrar toasts (mensajes flotantes)
+  const showNotification = (message, type = 'info') => {
+    setToast({ message, type, id: Date.now() });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // Cargar notificaciones iniciales (solo una vez)
   useEffect(() => {
@@ -98,6 +106,12 @@ export function NotificationProvider({ children }) {
             setNotifications(prev => [newNotification, ...prev]);
             setUnreadCount(prev => prev + 1);
             
+            // Mostrar toast también
+            showNotification(
+              newNotification.message,
+              newNotification.type === 'success' ? 'success' : 'error'
+            );
+            
           } catch (error) {
             console.error('Error procesando notificación:', error);
           }
@@ -108,7 +122,7 @@ export function NotificationProvider({ children }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, []); // Dependencias vacías
+  }, [readIds]); // Añadimos readIds como dependencia
 
   // Cargar notificaciones existentes desde Supabase
   const loadInitialNotifications = async () => {
@@ -136,12 +150,11 @@ export function NotificationProvider({ children }) {
         `)
         .not('client_action', 'is', null)
         .order('action_date', { ascending: false })
-        .limit(50); // Limitamos a 50 notificaciones
+        .limit(50);
 
       if (error) throw error;
 
       if (tokens && tokens.length > 0) {
-        // Formatear notificaciones
         const formattedNotifications = tokens.map(token => ({
           id: token.id,
           type: token.client_action === 'aceptado' ? 'success' : 'error',
@@ -154,13 +167,11 @@ export function NotificationProvider({ children }) {
           orderId: token.order_id,
           orderNumber: token.ordenes?.order_number,
           timestamp: token.action_date,
-          // Si el ID está en readIds, está leída
           read: readIds.has(token.id)
         }));
 
         setNotifications(formattedNotifications);
         
-        // Calcular no leídas (las que no están en readIds)
         const unread = formattedNotifications.filter(n => !n.read).length;
         setUnreadCount(unread);
       }
@@ -201,20 +212,50 @@ export function NotificationProvider({ children }) {
     setUnreadCount(0);
   };
 
+  // Limpiar toast automáticamente
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   return (
     <NotificationContext.Provider value={{
       notifications,
       unreadCount,
       loading,
+      toast,
+      showNotification, // ✅ Ahora exportamos showNotification
       markAsRead,
       markAsUnread,
       markAllAsRead
     }}>
       {children}
+      
+      {/* Toast/Notificación flotante */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 animate-slide-down">
+          <div className={`
+            px-6 py-4 rounded-xl shadow-lg flex items-center space-x-3
+            ${toast.type === 'success' ? 'bg-green-500 text-white' : ''}
+            ${toast.type === 'error' ? 'bg-red-500 text-white' : ''}
+            ${toast.type === 'info' ? 'bg-blue-500 text-white' : ''}
+            ${toast.type === 'warning' ? 'bg-yellow-500 text-white' : ''}
+          `}>
+            {toast.type === 'success' && <CheckCircle className="w-5 h-5" />}
+            {toast.type === 'error' && <AlertCircle className="w-5 h-5" />}
+            {toast.type === 'info' && <Info className="w-5 h-5" />}
+            {toast.type === 'warning' && <AlertTriangle className="w-5 h-5" />}
+            <span className="font-medium">{toast.message}</span>
+          </div>
+        </div>
+      )}
     </NotificationContext.Provider>
   );
 }
 
+// Hook personalizado - NOTA: AHORA SE LLAMA useNotifications (plural)
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
   if (!context) {
@@ -222,3 +263,6 @@ export const useNotifications = () => {
   }
   return context;
 };
+
+// También exportamos un alias por si prefieres useNotification (singular)
+export const useNotification = useNotifications;

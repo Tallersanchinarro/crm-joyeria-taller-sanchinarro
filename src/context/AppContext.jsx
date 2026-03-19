@@ -178,6 +178,28 @@ export function AppProvider({ children }) {
     }
   };
 
+  // AÑADE ESTA FUNCIÓN DENTRO DE AppContext.jsx (junto a las otras funciones CRUD)
+
+const deleteClient = async (clientId) => {
+  try {
+    const { error } = await supabase
+      .from('clientes')
+      .delete()
+      .eq('id', clientId);
+
+    if (error) throw error;
+    
+    // Actualizar el estado local
+    setClients(prev => prev.filter(c => c.id !== clientId));
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting client:', error.message);
+    throw error;
+  }
+};
+
+
   const updateClient = async (clientId, updates) => {
     try {
       const { data, error } = await supabase
@@ -263,6 +285,7 @@ export function AppProvider({ children }) {
     updateClient,
     createOrder,
     updateOrder,
+    deleteClient,
     getStats,
     generateBudgetLink, // AHORA ESTÁ DECLARADA ANTES
     refreshData: () => {

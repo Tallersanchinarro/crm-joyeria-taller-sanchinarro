@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -16,19 +16,32 @@ import {
   X,
   Save,
   Gem,
-  AlertCircle
+  AlertCircle,
+  CheckCircle,
+  Eye,
+  MoreVertical,
+  Download,
+  Filter
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useNotifications } from '../context/NotificationContext';
 
 function Clientes() {
   const navigate = useNavigate();
   const { clients, orders, createClient, updateClient, deleteClient } = useApp();
+  const { showNotification } = useNotifications();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClient, setSelectedClient] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, name }
+  const [viewMode, setViewMode] = useState('table'); // 'table' o 'cards'
+  const [sortBy, setSortBy] = useState('name'); // 'name', 'date', 'orders'
+  const [sortOrder, setSortOrder] = useState('asc');
+  const [filterActive, setFilterActive] = useState(false); // solo clientes con órdenes activas
+
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -37,38 +50,67 @@ function Clientes() {
     notes: ''
   });
 
-  // Filtrar clientes
-  const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.phone.includes(searchTerm) ||
-    (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
   // Obtener órdenes de un cliente
-  const getClientOrders = (clientId) => {
+  const getClientOrders = useCallback((clientId) => {
     return orders.filter(o => o.client_id === clientId);
-  };
+  }, [orders]);
 
   // Obtener órdenes activas
-  const getActiveOrders = (clientId) => {
+  const getActiveOrders = useCallback((clientId) => {
     return orders.filter(o => 
       o.client_id === clientId && 
       o.status !== 'Entregado' && 
       o.status !== 'Rechazado'
     ).length;
-  };
+  }, [orders]);
 
   // Obtener última orden
-  const getLastOrderDate = (clientId) => {
+  const getLastOrderDate = useCallback((clientId) => {
     const clientOrders = orders.filter(o => o.client_id === clientId);
     if (clientOrders.length === 0) return null;
-    
     const lastOrder = clientOrders.sort((a, b) => 
       new Date(b.created_at) - new Date(a.created_at)
     )[0];
-    
     return lastOrder.created_at;
-  };
+  }, [orders]);
+
+  // Filtrar y ordenar clientes
+  const filteredClients = useMemo(() => {
+    let result = clients.filter(client =>
+      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.phone.includes(searchTerm) ||
+      (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    if (filterActive) {
+      result = result.filter(client => getActiveOrders(client.id) > 0);
+    }
+
+    result.sort((a, b) => {
+      let aValue, bValue;
+      switch (sortBy) {
+        case 'name':
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case 'date':
+          aValue = new Date(getLastOrderDate(a.id) || 0).getTime();
+          bValue = new Date(getLastOrderDate(b.id) || 0).getTime();
+          break;
+        case 'orders':
+          aValue = getClientOrders(a.id).length;
+          bValue = getClientOrders(b.id).length;
+          break;
+        default:
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+      }
+      if (sortOrder === 'asc') return aValue > bValue ? 1 : -1;
+      else return aValue < bValue ? 1 : -1;
+    });
+
+    return result;
+  }, [clients, searchTerm, filterActive, sortBy, sortOrder, getActiveOrders, getClientOrders, getLastOrderDate]);
 
   // Guardar cliente
   const handleSaveClient = async () => {
@@ -83,37 +125,42 @@ function Clientes() {
     try {
       if (isEditing && selectedClient) {
         await updateClient(selectedClient.id, formData);
+        showNotification('Cliente actualizado correctamente', 'success');
       } else {
         await createClient(formData);
+        showNotification('Cliente creado correctamente', 'success');
       }
-      
       setIsModalOpen(false);
       resetForm();
     } catch (error) {
       setError(error.message);
+      showNotification('Error al guardar el cliente', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   // Eliminar cliente
-  const handleDeleteClient = async (client) => {
-    const clientOrders = getClientOrders(client.id);
-    
+  const handleDeleteClient = async () => {
+    if (!deleteConfirm) return;
+    const { id, name } = deleteConfirm;
+    const clientOrders = getClientOrders(id);
+
     if (clientOrders.length > 0) {
-      alert('No se puede eliminar un cliente con órdenes asociadas');
+      showNotification('No se puede eliminar un cliente con órdenes asociadas', 'warning');
+      setDeleteConfirm(null);
       return;
     }
 
-    if (window.confirm(`¿Estás seguro de eliminar a ${client.name}?`)) {
-      setLoading(true);
-      try {
-        await deleteClient(client.id);
-      } catch (error) {
-        alert('Error al eliminar: ' + error.message);
-      } finally {
-        setLoading(false);
-      }
+    setLoading(true);
+    try {
+      await deleteClient(id);
+      showNotification(`Cliente ${name} eliminado`, 'success');
+      setDeleteConfirm(null);
+    } catch (error) {
+      showNotification('Error al eliminar: ' + error.message, 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -144,6 +191,12 @@ function Clientes() {
     setError(null);
   };
 
+  // Ver detalles del cliente (podría abrir un modal con historial)
+  const handleViewClient = (client) => {
+    // Por ahora navega a las reparaciones del cliente
+    navigate(`/reparaciones-activas?cliente=${client.id}`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -154,27 +207,64 @@ function Clientes() {
             Total: {clients.length} clientes registrados
           </p>
         </div>
-        <button
-          onClick={handleNewClient}
-          className="btn-primary flex items-center space-x-2"
-          disabled={loading}
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nuevo cliente</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')}
+            className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            title={viewMode === 'table' ? 'Vista de tarjetas' : 'Vista de tabla'}
+          >
+            {viewMode === 'table' ? '📇' : '📋'}
+          </button>
+          <button
+            onClick={handleNewClient}
+            className="btn-primary flex items-center space-x-2"
+            disabled={loading}
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nuevo cliente</span>
+          </button>
+        </div>
       </div>
 
-      {/* Buscador */}
+      {/* Buscador y filtros */}
       <div className="bg-white rounded-xl shadow-sm p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre, teléfono o email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Buscar por nombre, teléfono o email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setFilterActive(!filterActive)}
+              className={`px-3 py-2 border rounded-lg flex items-center space-x-2 ${
+                filterActive ? 'bg-primary-50 border-primary-300 text-primary-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              <span className="text-sm">Con órdenes activas</span>
+            </button>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            >
+              <option value="name">Ordenar por nombre</option>
+              <option value="date">Ordenar por última actividad</option>
+              <option value="orders">Ordenar por nº de órdenes</option>
+            </select>
+            <button
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              {sortOrder === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -183,15 +273,16 @@ function Clientes() {
         {filteredClients.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">No hay clientes</p>
+            <p className="text-gray-500">No hay clientes que coincidan con la búsqueda</p>
             <button
               onClick={handleNewClient}
               className="mt-2 text-primary-600 hover:text-primary-700 text-sm font-medium"
             >
-              + Añadir primer cliente
+              + Añadir nuevo cliente
             </button>
           </div>
-        ) : (
+        ) : viewMode === 'table' ? (
+          // Vista de tabla
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -256,7 +347,7 @@ function Clientes() {
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-2">
                           <button
-                            onClick={() => navigate(`/reparaciones-activas?cliente=${client.id}`)}
+                            onClick={() => handleViewClient(client)}
                             className="p-1 hover:bg-gray-100 rounded"
                             title="Ver reparaciones"
                           >
@@ -271,7 +362,7 @@ function Clientes() {
                             <Edit className="w-4 h-4 text-gray-600" />
                           </button>
                           <button
-                            onClick={() => handleDeleteClient(client)}
+                            onClick={() => setDeleteConfirm({ id: client.id, name: client.name })}
                             className="p-1 hover:bg-red-100 rounded"
                             title="Eliminar"
                             disabled={loading || clientOrders.length > 0}
@@ -286,15 +377,108 @@ function Clientes() {
               </tbody>
             </table>
           </div>
+        ) : (
+          // Vista de tarjetas (para móvil)
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+            {filteredClients.map((client) => {
+              const clientOrders = getClientOrders(client.id);
+              const activeOrders = getActiveOrders(client.id);
+              const lastOrderDate = getLastOrderDate(client.id);
+              return (
+                <div key={client.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                        <Gem className="w-5 h-5 text-primary-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{client.name}</p>
+                        <p className="text-xs text-gray-500">{client.phone}</p>
+                      </div>
+                    </div>
+                    {activeOrders > 0 && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                        {activeOrders} activas
+                      </span>
+                    )}
+                  </div>
+                  {client.email && (
+                    <p className="text-sm text-gray-600 flex items-center mb-2">
+                      <Mail className="w-4 h-4 mr-2 text-gray-400" />
+                      {client.email}
+                    </p>
+                  )}
+                  <div className="flex justify-between items-center text-sm text-gray-500 mb-3">
+                    <span>Órdenes: {clientOrders.length}</span>
+                    <span>Última: {lastOrderDate ? new Date(lastOrderDate).toLocaleDateString() : 'Nunca'}</span>
+                  </div>
+                  <div className="flex justify-end space-x-2 border-t pt-3">
+                    <button
+                      onClick={() => handleViewClient(client)}
+                      className="p-2 hover:bg-gray-100 rounded"
+                      title="Ver reparaciones"
+                    >
+                      <Package className="w-4 h-4 text-gray-600" />
+                    </button>
+                    <button
+                      onClick={() => handleEditClient(client)}
+                      className="p-2 hover:bg-gray-100 rounded"
+                      title="Editar"
+                    >
+                      <Edit className="w-4 h-4 text-gray-600" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm({ id: client.id, name: client.name })}
+                      className="p-2 hover:bg-red-100 rounded"
+                      title="Eliminar"
+                      disabled={clientOrders.length > 0}
+                    >
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
-      {/* Modal de cliente */}
+      {/* Modal de confirmación de eliminación */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center space-x-3 text-red-600 mb-4">
+              <AlertCircle className="w-6 h-6" />
+              <h3 className="text-lg font-semibold">Confirmar eliminación</h3>
+            </div>
+            <p className="text-gray-600 mb-6">
+              ¿Estás seguro de que deseas eliminar a <span className="font-bold">{deleteConfirm.name}</span>? Esta acción no se puede deshacer.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteClient}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                disabled={loading}
+              >
+                {loading ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de cliente (igual que antes, pero con mejoras) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="font-semibold">
+              <h3 className="font-semibold text-lg">
                 {isEditing ? 'Editar cliente' : 'Nuevo cliente'}
               </h3>
               <button
@@ -318,13 +502,13 @@ function Clientes() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nombre *
+                  Nombre <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="input-field"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Ej: María García"
                   autoFocus
                 />
@@ -332,52 +516,52 @@ function Clientes() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Teléfono *
+                  Teléfono <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  className="input-field"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="+34 612 345 678"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email (opcional)
+                  Email
                 </label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  className="input-field"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="cliente@email.com"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Dirección (opcional)
+                  Dirección
                 </label>
                 <input
                   type="text"
                   value={formData.address}
                   onChange={(e) => setFormData({...formData, address: e.target.value})}
-                  className="input-field"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Calle, ciudad..."
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notas (opcional)
+                  Notas
                 </label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
                   rows="2"
-                  className="input-field"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Información adicional..."
                 />
               </div>
@@ -389,7 +573,7 @@ function Clientes() {
                   setIsModalOpen(false);
                   resetForm();
                 }}
-                className="btn-secondary"
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 disabled={loading}
               >
                 Cancelar
@@ -397,7 +581,7 @@ function Clientes() {
               <button
                 onClick={handleSaveClient}
                 disabled={loading || !formData.name || !formData.phone}
-                className="btn-primary flex items-center space-x-2 disabled:opacity-50"
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center space-x-2 disabled:opacity-50"
               >
                 {loading ? (
                   <>
@@ -407,7 +591,7 @@ function Clientes() {
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    <span>{isEditing ? 'Guardar' : 'Crear'}</span>
+                    <span>{isEditing ? 'Actualizar' : 'Crear'}</span>
                   </>
                 )}
               </button>
