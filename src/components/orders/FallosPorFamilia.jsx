@@ -4,10 +4,9 @@ import {
   CheckCircle, 
   XCircle, 
   AlertTriangle,
-  ChevronDown,
-  ChevronUp,
   X,
-  Layers
+  Layers,
+  Edit2
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -15,9 +14,10 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
   const [familias, setFamilias] = useState([]);
   const [fallos, setFallos] = useState({});
   const [fallosSeleccionados, setFallosSeleccionados] = useState(fallosIniciales);
-  const [familiasAbiertas, setFamiliasAbiertas] = useState({});
+  const [familiaSeleccionada, setFamiliaSeleccionada] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [modoVista, setModoVista] = useState('selector'); // 'selector' o 'tabla'
+  const [modoVista, setModoVista] = useState('selector');
+  const [editandoObservacion, setEditandoObservacion] = useState(null);
 
   // Configuración de gravedad
   const gravedadConfig = {
@@ -53,7 +53,6 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
 
   const cargarDatos = async () => {
     try {
-      // Cargar familias de fallos activas
       const { data: familiasData } = await supabase
         .from('familias_fallos')
         .select('*')
@@ -62,13 +61,11 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
 
       setFamilias(familiasData || []);
 
-      // Cargar fallos predefinidos activos
       const { data: fallosData } = await supabase
         .from('fallos_predefinidos')
         .select('*')
         .eq('activo', true);
 
-      // Agrupar fallos por familia
       const fallosPorFamilia = {};
       fallosData?.forEach(f => {
         if (!fallosPorFamilia[f.familia_id]) {
@@ -79,11 +76,10 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
       
       setFallos(fallosPorFamilia);
 
-      // Abrir primera familia por defecto
+      // Seleccionar primera familia por defecto
       if (familiasData?.length > 0) {
-        setFamiliasAbiertas({ [familiasData[0].id]: true });
+        setFamiliaSeleccionada(familiasData[0].id);
       }
-
     } catch (error) {
       console.error('Error cargando fallos:', error);
     } finally {
@@ -100,13 +96,6 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
     });
     return contadores;
   }, [fallosSeleccionados]);
-
-  const toggleFamilia = (familiaId) => {
-    setFamiliasAbiertas(prev => ({
-      ...prev,
-      [familiaId]: !prev[familiaId]
-    }));
-  };
 
   const toggleFallo = (fallo) => {
     setFallosSeleccionados(prev => {
@@ -148,6 +137,7 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
       })
     );
     onFallosChange?.(fallosSeleccionados);
+    setEditandoObservacion(null);
   };
 
   if (loading) {
@@ -158,48 +148,26 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
     );
   }
 
+  const fallosDeFamilia = fallos[familiaSeleccionada] || [];
+  const familiaActual = familias.find(f => f.id === familiaSeleccionada);
+
   return (
     <div className="space-y-6">
-      {/* Leyenda de familias con contadores */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-          <h3 className="font-medium text-gray-700 flex items-center">
-            <Layers className="w-4 h-4 mr-2 text-gray-500" />
-            Familias de fallos
-          </h3>
-        </div>
-        <div className="p-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-          {familias.map((familia) => (
-            <button
-              key={familia.id}
-              onClick={() => toggleFamilia(familia.id)}
-              className={`
-                flex items-center justify-between px-3 py-2 rounded-lg text-sm
-                transition-all hover:shadow-md border
-                ${contadoresPorFamilia[familia.id] > 0 
-                  ? 'bg-orange-50 border-orange-200 hover:bg-orange-100' 
-                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                }
-              `}
-            >
-              <span className="text-gray-700">{familia.nombre}</span>
-              {contadoresPorFamilia[familia.id] > 0 ? (
-                <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-orange-500 text-white">
-                  {contadoresPorFamilia[familia.id]}
-                </span>
-              ) : (
-                <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-600">
-                  0
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Selector de vista */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="border-b border-gray-200 flex">
+          <button
+            onClick={() => setModoVista('selector')}
+            className={`
+              px-6 py-3 text-sm font-medium border-b-2 transition-colors
+              ${modoVista === 'selector'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+              }
+            `}
+          >
+            🔍 Seleccionar fallos
+          </button>
           <button
             onClick={() => setModoVista('tabla')}
             className={`
@@ -212,21 +180,141 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
           >
             📋 Tabla de fallos ({fallosSeleccionados.length})
           </button>
-          <button
-            onClick={() => setModoVista('selector')}
-            className={`
-              px-6 py-3 text-sm font-medium border-b-2 transition-colors
-              ${modoVista === 'selector'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-              }
-            `}
-          >
-            🔍 Selector por familias
-          </button>
         </div>
 
         <div className="p-4">
+          {/* MODO SELECTOR - Con familias arriba y fallos debajo */}
+          {modoVista === 'selector' && (
+            <div className="space-y-6">
+              {/* Leyenda de familias (solo visual, sin acordeón) */}
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Familias de fallos</h3>
+                <div className="flex flex-wrap gap-2">
+                  {familias.map((familia) => (
+                    <button
+                      key={familia.id}
+                      onClick={() => setFamiliaSeleccionada(familia.id)}
+                      className={`
+                        flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-all
+                        ${familiaSeleccionada === familia.id
+                          ? 'bg-orange-600 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }
+                      `}
+                    >
+                      <span>{familia.nombre}</span>
+                      {contadoresPorFamilia[familia.id] > 0 && (
+                        <span className={`
+                          ml-1 px-2 py-0.5 rounded-full text-xs
+                          ${familiaSeleccionada === familia.id
+                            ? 'bg-white text-orange-600'
+                            : 'bg-orange-500 text-white'
+                          }
+                        `}>
+                          {contadoresPorFamilia[familia.id]}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Fallos de la familia seleccionada */}
+              {familiaActual && (
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                    <h3 className="font-medium text-gray-700">
+                      Fallos de {familiaActual.nombre}
+                    </h3>
+                  </div>
+                  <div className="divide-y divide-gray-200">
+                    {fallosDeFamilia.length > 0 ? (
+                      fallosDeFamilia.map(fallo => {
+                        const seleccionado = fallosSeleccionados.find(f => f.fallo_id === fallo.id);
+                        const gravedad = gravedadConfig[fallo.gravedad] || gravedadConfig.media;
+                        const Icon = gravedad.icon;
+                        
+                        return (
+                          <div key={fallo.id} className="p-4 hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3 flex-1">
+                                <input
+                                  type="checkbox"
+                                  checked={!!seleccionado}
+                                  onChange={() => toggleFallo(fallo)}
+                                  className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                />
+                                <div className="flex items-center space-x-2">
+                                  <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-xs ${gravedad.color}`}>
+                                    <Icon className="w-3 h-3" />
+                                    <span>{gravedad.label}</span>
+                                  </span>
+                                  <span className="text-gray-800 font-medium">{fallo.nombre}</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Campo de observaciones cuando está seleccionado */}
+                            {seleccionado && (
+                              <div className="mt-3 ml-8">
+                                {editandoObservacion === fallo.id ? (
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="text"
+                                      defaultValue={seleccionado.observaciones || ''}
+                                      onBlur={(e) => actualizarObservaciones(fallo.id, e.target.value)}
+                                      onKeyPress={(e) => {
+                                        if (e.key === 'Enter') {
+                                          actualizarObservaciones(fallo.id, e.target.value);
+                                        }
+                                      }}
+                                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-1 focus:ring-primary-500"
+                                      placeholder="Añadir observaciones..."
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={() => setEditandoObservacion(null)}
+                                      className="p-1 text-gray-400 hover:text-gray-600"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div 
+                                    onClick={() => setEditandoObservacion(fallo.id)}
+                                    className="cursor-pointer group"
+                                  >
+                                    {seleccionado.observaciones ? (
+                                      <div className="flex items-start space-x-2">
+                                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                          📝 {seleccionado.observaciones}
+                                        </span>
+                                        <Edit2 className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-gray-400 hover:text-gray-500">
+                                        + Añadir observación
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-12">
+                        <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-500">No hay fallos en esta familia</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* MODO TABLA */}
           {modoVista === 'tabla' && (
             <div className="space-y-4">
@@ -263,7 +351,7 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
                             <td className="px-4 py-3 text-sm text-gray-500">
                               {familia?.nombre || 'Sin familia'}
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-500">
+                            <td className="px-4 py-3">
                               <input
                                 type="text"
                                 placeholder="Añadir observación..."
@@ -293,104 +381,15 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
                 <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                   <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                   <p className="text-gray-500 font-medium">No hay fallos seleccionados</p>
-                  <p className="text-sm text-gray-400 mt-1">Ve a "Selector por familias" para añadir fallos</p>
+                  <p className="text-sm text-gray-400 mt-1">Ve a "Seleccionar fallos" para añadir fallos</p>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* MODO SELECTOR POR FAMILIAS - CON CHECKBOX SIMPLES */}
-          {modoVista === 'selector' && (
-            <div className="space-y-4">
-              {familias.map(familia => {
-                const fallosFamilia = fallos[familia.id] || [];
-                const estaAbierta = familiasAbiertas[familia.id];
-                const contadorFamilia = contadoresPorFamilia[familia.id] || 0;
-
-                if (fallosFamilia.length === 0) return null;
-
-                return (
-                  <div key={familia.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                    {/* Cabecera de familia */}
-                    <button
-                      onClick={() => toggleFamilia(familia.id)}
-                      className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <span className="font-medium text-gray-700">{familia.nombre}</span>
-                        {contadorFamilia > 0 && (
-                          <span className="px-2 py-0.5 bg-orange-500 text-white text-xs rounded-full">
-                            {contadorFamilia} seleccionados
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <span className="text-xs text-gray-500">
-                          {fallosFamilia.length} fallos
-                        </span>
-                        {estaAbierta ? 
-                          <ChevronUp className="w-4 h-4 text-gray-500" /> : 
-                          <ChevronDown className="w-4 h-4 text-gray-500" />
-                        }
-                      </div>
-                    </button>
-
-                    {/* Fallos de la familia - CON CHECKBOX SIMPLES */}
-                    {estaAbierta && (
-                      <div className="p-4 space-y-3">
-                        {fallosFamilia.map(fallo => {
-                          const seleccionado = fallosSeleccionados.find(f => 
-                            f.fallo_id === fallo.id
-                          );
-                          const gravedad = gravedadConfig[fallo.gravedad] || gravedadConfig.media;
-                          const Icon = gravedad.icon;
-
-                          return (
-                            <div key={fallo.id} className="flex items-start space-x-3 p-2 hover:bg-gray-50 rounded-lg">
-                              <input
-                                type="checkbox"
-                                checked={!!seleccionado}
-                                onChange={() => toggleFallo(fallo)}
-                                className="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center space-x-2">
-                                    <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-xs ${gravedad.color}`}>
-                                      <Icon className="w-3 h-3" />
-                                      <span>{gravedad.label}</span>
-                                    </span>
-                                    <span className="text-sm font-medium text-gray-800">{fallo.nombre}</span>
-                                  </div>
-                                </div>
-                                
-                                {/* Campo de observaciones si está seleccionado */}
-                                {seleccionado && (
-                                  <div className="mt-2 ml-6">
-                                    <input
-                                      type="text"
-                                      placeholder="Observaciones..."
-                                      value={seleccionado.observaciones || ''}
-                                      onChange={(e) => actualizarObservaciones(fallo.id, e.target.value)}
-                                      className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:ring-1 focus:ring-primary-500"
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
             </div>
           )}
         </div>
       </div>
 
-      {/* Resumen de fallos seleccionados (solo visible en modo selector) */}
+      {/* Resumen de fallos seleccionados */}
       {fallosSeleccionados.length > 0 && modoVista === 'selector' && (
         <div className="bg-gradient-to-r from-orange-50 to-orange-100/50 p-4 rounded-xl border border-orange-200">
           <div className="flex items-center justify-between mb-3">
@@ -398,10 +397,7 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
               <AlertCircle className="w-4 h-4 mr-2" />
               Fallos seleccionados ({fallosSeleccionados.length})
             </h4>
-            <button
-              onClick={() => setModoVista('tabla')}
-              className="text-xs text-orange-600 hover:text-orange-800"
-            >
+            <button onClick={() => setModoVista('tabla')} className="text-xs text-orange-600 hover:text-orange-800">
               Ver detalles
             </button>
           </div>
@@ -415,7 +411,9 @@ function FallosPorFamilia({ ordenId, onFallosChange, fallosIniciales = [] }) {
                 >
                   <span className={`w-2 h-2 rounded-full ${gravedad.bgColor}`} />
                   <span>{fallo.nombre}</span>
-                  {fallo.observaciones && <span className="text-xs opacity-75">({fallo.observaciones})</span>}
+                  {fallo.observaciones && (
+                    <span className="text-xs opacity-75 ml-1">📝 {fallo.observaciones}</span>
+                  )}
                   <button
                     onClick={() => eliminarFallo(fallo.id)}
                     className="ml-1 hover:bg-black/10 rounded-full p-0.5"

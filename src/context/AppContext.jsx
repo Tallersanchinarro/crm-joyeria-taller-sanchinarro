@@ -112,7 +112,7 @@ export function AppProvider({ children }) {
     };
   }, [user]);
 
-  // FUNCIÓN PARA GENERAR ENLACES DE PRESUPUESTO (AHORA DECLARADA ANTES DE USARLA)
+  // FUNCIÓN PARA GENERAR ENLACES DE PRESUPUESTO
   const generateBudgetLink = async (orderId) => {
     try {
       // Verificar si ya existe un token para esta orden
@@ -158,7 +158,7 @@ export function AppProvider({ children }) {
     }
   };
 
-  // FUNCIONES CRUD
+  // FUNCIONES CRUD - CLIENTES
   const createClient = async (clientData) => {
     try {
       const { data, error } = await supabase
@@ -171,34 +171,15 @@ export function AppProvider({ children }) {
         .single();
 
       if (error) throw error;
+      
+      // Actualizar estado local
+      setClients(prev => [data, ...prev]);
       return data;
     } catch (error) {
       console.error('Error creating client:', error.message);
       throw error;
     }
   };
-
-  // AÑADE ESTA FUNCIÓN DENTRO DE AppContext.jsx (junto a las otras funciones CRUD)
-
-const deleteClient = async (clientId) => {
-  try {
-    const { error } = await supabase
-      .from('clientes')
-      .delete()
-      .eq('id', clientId);
-
-    if (error) throw error;
-    
-    // Actualizar el estado local
-    setClients(prev => prev.filter(c => c.id !== clientId));
-    
-    return true;
-  } catch (error) {
-    console.error('Error deleting client:', error.message);
-    throw error;
-  }
-};
-
 
   const updateClient = async (clientId, updates) => {
     try {
@@ -210,6 +191,11 @@ const deleteClient = async (clientId) => {
         .single();
 
       if (error) throw error;
+      
+      // Actualizar estado local
+      setClients(prev => prev.map(client => 
+        client.id === clientId ? { ...client, ...data } : client
+      ));
       return data;
     } catch (error) {
       console.error('Error updating client:', error.message);
@@ -217,6 +203,26 @@ const deleteClient = async (clientId) => {
     }
   };
 
+  const deleteClient = async (clientId) => {
+    try {
+      const { error } = await supabase
+        .from('clientes')
+        .delete()
+        .eq('id', clientId);
+
+      if (error) throw error;
+      
+      // Actualizar el estado local
+      setClients(prev => prev.filter(c => c.id !== clientId));
+      
+      return true;
+    } catch (error) {
+      console.error('Error deleting client:', error.message);
+      throw error;
+    }
+  };
+
+  // FUNCIONES CRUD - ÓRDENES
   const createOrder = async (orderData) => {
     try {
       const { data, error } = await supabase
@@ -229,6 +235,9 @@ const deleteClient = async (clientId) => {
         .single();
 
       if (error) throw error;
+      
+      // Actualizar estado local
+      setOrders(prev => [data, ...prev]);
       return data;
     } catch (error) {
       console.error('Error creating order:', error.message);
@@ -246,6 +255,12 @@ const deleteClient = async (clientId) => {
         .single();
 
       if (error) throw error;
+      
+      // ACTUALIZAR ESTADO LOCAL INMEDIATAMENTE
+      setOrders(prev => prev.map(order => 
+        order.id === orderId ? { ...order, ...data } : order
+      ));
+      
       return data;
     } catch (error) {
       console.error('Error updating order:', error.message);
@@ -283,11 +298,11 @@ const deleteClient = async (clientId) => {
     user,
     createClient,
     updateClient,
+    deleteClient,
     createOrder,
     updateOrder,
-    deleteClient,
     getStats,
-    generateBudgetLink, // AHORA ESTÁ DECLARADA ANTES
+    generateBudgetLink,
     refreshData: () => {
       fetchClients();
       fetchOrders();

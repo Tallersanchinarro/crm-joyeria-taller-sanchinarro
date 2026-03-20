@@ -14,6 +14,7 @@ import Historial from './pages/Historial';
 import Clientes from './pages/Clientes';
 import PresupuestoPublico from './pages/PresupuestoPublico';
 import Notificaciones from './pages/Notificaciones';
+import VistaPreviaPresupuesto from './pages/VistaPreviaPresupuesto';
 
 // Páginas de administración
 import AdminTrabajos from './pages/AdminTrabajos';
@@ -50,7 +51,9 @@ function App() {
                         <Route path="/historial" element={<Historial />} />
                         <Route path="/clientes" element={<Clientes />} />
                         <Route path="/notificaciones" element={<Notificaciones />} />
-                        
+                        <Route path="/presupuesto/taller/:orderId" element={<VistaPreviaPresupuesto />} />
+
+
                         {/* Rutas de administración */}
                         <Route path="/admin-trabajos" element={<AdminTrabajos />} />
                         <Route path="/admin-fallos" element={<AdminFallos />} />

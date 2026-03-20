@@ -127,7 +127,7 @@ function PresupuestoPublico() {
 
       setActionTaken(true);
       setActionMessage(response === 'aceptado' 
-        ? '✅ ¡Presupuesto aceptado! En breve nos pondremos en contacto para comenzar la reparación.' 
+        ? '✅ ¡Presupuesto aceptado! En breve nos pondremos con la reparación.'
         : '❌ Presupuesto rechazado. Si tienes alguna duda, no dudes en contactarnos.');
 
     } catch (error) {

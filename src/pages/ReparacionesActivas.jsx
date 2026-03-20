@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Package,
@@ -18,7 +18,8 @@ import {
   ChevronDown,
   ArrowRight,
   Archive,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { generateReceptionPDF } from '../utils/pdfGenerator';
@@ -34,30 +35,36 @@ function ReparacionesActivas() {
   const [statusNote, setStatusNote] = useState('');
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  // Filtrar órdenes activas (no entregadas/archivadas)
-  const activeOrders = orders.filter(o => 
-    o.status !== 'Entregado' && 
-    o.status !== 'Archivado'
+  // Usar useMemo para que se recalcule cuando cambien orders o filtros
+  const activeOrders = useMemo(() => 
+    orders.filter(o => o.status !== 'Entregado' && o.status !== 'Archivado'),
+    [orders]
   );
   
   // Aplicar filtros de búsqueda y estado
-  const filteredOrders = activeOrders.filter(order => {
-    const matchesSearch = 
-      order.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.item_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.client_phone?.includes(searchTerm) ||
-      order.material?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesFilter = filterStatus === 'todas' || order.status === filterStatus;
-    
-    return matchesSearch && matchesFilter;
-  });
+  const filteredOrders = useMemo(() => {
+    return activeOrders.filter(order => {
+      const matchesSearch = 
+        order.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.item_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.client_phone?.includes(searchTerm) ||
+        order.material?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesFilter = filterStatus === 'todas' || order.status === filterStatus;
+      
+      return matchesSearch && matchesFilter;
+    });
+  }, [activeOrders, searchTerm, filterStatus]);
 
   // Ordenar por fecha (más recientes primero)
-  const sortedOrders = [...filteredOrders].sort((a, b) => 
-    new Date(b.created_at) - new Date(a.created_at)
+  const sortedOrders = useMemo(() => 
+    [...filteredOrders].sort((a, b) => 
+      new Date(b.created_at) - new Date(a.created_at)
+    ),
+    [filteredOrders]
   );
 
   const getStatusColor = (status) => {
@@ -94,45 +101,61 @@ function ReparacionesActivas() {
   };
 
   // Confirmar cambio de estado
-  const confirmStatusChange = () => {
-    if (!selectedOrder) return;
+  const confirmStatusChange = async () => {
+    if (!selectedOrder || !newStatus || newStatus === selectedOrder.status) return;
+    
+    setIsUpdating(true);
 
-    const updates = {
-      status: newStatus,
-      status_history: [
-        ...(selectedOrder.status_history || []),
-        {
-          from: selectedOrder.status,
-          to: newStatus,
-          date: new Date().toISOString(),
-          note: statusNote
-        }
-      ]
-    };
+    try {
+      const updates = {
+        status: newStatus,
+        status_history: [
+          ...(selectedOrder.status_history || []),
+          {
+            from: selectedOrder.status,
+            to: newStatus,
+            date: new Date().toISOString(),
+            note: statusNote
+          }
+        ]
+      };
 
-    // Si el estado es "Listo", registrar fecha de finalización
-    if (newStatus === 'Listo') {
-      updates.completed_at = new Date().toISOString();
+      // Si el estado es "Listo", registrar fecha de finalización
+      if (newStatus === 'Listo') {
+        updates.completed_at = new Date().toISOString();
+      }
+
+      // Si el estado es "Rechazado", actualizar budget_status
+      if (newStatus === 'Rechazado') {
+        updates.budget_status = 'rechazado';
+      }
+
+      console.log('Actualizando orden:', selectedOrder.id, updates);
+
+      // Actualizar la orden
+      await updateOrder(selectedOrder.id, updates);
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage(`✅ Estado cambiado a: ${newStatus}`);
+      setShowSuccessMessage(true);
+      
+      // Cerrar modal y resetear
+      setShowStatusModal(false);
+      setSelectedOrder(null);
+      setNewStatus('');
+      setStatusNote('');
+      
+      // El mensaje se ocultará después de 3 segundos
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+      
+    } catch (error) {
+      console.error('Error al cambiar estado:', error);
+      setSuccessMessage('❌ Error al cambiar estado');
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+    } finally {
+      setIsUpdating(false);
     }
-
-    // Si el estado es "Rechazado" o "Archivado", registrar fecha
-    if (newStatus === 'Rechazado' || newStatus === 'Archivado') {
-      updates.archived_at = new Date().toISOString();
-    }
-
-    // Actualizar la orden
-    updateOrder(selectedOrder.id, updates);
-
-    // Mostrar mensaje de éxito
-    setSuccessMessage(`Estado cambiado a: ${newStatus}`);
-    setShowSuccessMessage(true);
-    setTimeout(() => setShowSuccessMessage(false), 3000);
-
-    // Cerrar modal
-    setShowStatusModal(false);
-    setSelectedOrder(null);
-    setNewStatus('');
-    setStatusNote('');
   };
 
   // Marcar como listo
@@ -151,53 +174,65 @@ function ReparacionesActivas() {
     setShowStatusModal(true);
   };
 
-  // Manejar entrega (con redirección)
-  const handleDelivered = () => {
+  // Manejar entrega
+  const handleDelivered = async () => {
     if (!selectedOrder) return;
+    
+    setIsUpdating(true);
 
-    const updates = {
-      status: 'Entregado',
-      delivered_at: new Date().toISOString(),
-      paid: true,
-      status_history: [
-        ...(selectedOrder.status_history || []),
-        {
-          from: selectedOrder.status,
-          to: 'Entregado',
-          date: new Date().toISOString(),
-          note: statusNote || 'Entregado al cliente'
-        }
-      ]
-    };
+    try {
+      const updates = {
+        status: 'Entregado',
+        delivered_at: new Date().toISOString(),
+        paid: true,
+        status_history: [
+          ...(selectedOrder.status_history || []),
+          {
+            from: selectedOrder.status,
+            to: 'Entregado',
+            date: new Date().toISOString(),
+            note: statusNote || 'Entregado al cliente'
+          }
+        ]
+      };
 
-    updateOrder(selectedOrder.id, updates);
+      await updateOrder(selectedOrder.id, updates);
 
-    // Mostrar mensaje
-    setSuccessMessage('✅ Reparación entregada');
-    setShowSuccessMessage(true);
+      // Mostrar mensaje
+      setSuccessMessage('✅ Reparación entregada');
+      setShowSuccessMessage(true);
 
-    // Cerrar modal
-    setShowStatusModal(false);
+      // Cerrar modal
+      setShowStatusModal(false);
+      setSelectedOrder(null);
+      setNewStatus('');
+      setStatusNote('');
 
-    // Redirigir al historial después de 1.5 segundos
-    setTimeout(() => {
-      navigate('/historial');
-    }, 1500);
+      // Redirigir al historial después de 1.5 segundos
+      setTimeout(() => {
+        navigate('/historial');
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error al entregar:', error);
+      setSuccessMessage('❌ Error al entregar');
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handlePrintReceipt = (order) => {
-    // Buscar el cliente completo para tener todos sus datos
     const client = clients.find(c => c.id === order.client_id);
     if (client) {
       generateReceptionPDF(order, client, 'cliente');
     } else {
-      // Si no encontramos el cliente, usamos los datos de la orden
-      const clientData = {
+      generateReceptionPDF(order, {
         name: order.client_name,
         phone: order.client_phone,
         email: order.client_email
-      };
-      generateReceptionPDF(order, clientData, 'cliente');
+      }, 'cliente');
     }
   };
 
@@ -206,9 +241,9 @@ function ReparacionesActivas() {
       {/* Mensaje de éxito flotante */}
       {showSuccessMessage && (
         <div className="fixed top-4 right-4 z-50 animate-slide-down">
-          <div className="bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2">
+          <div className="bg-green-500 text-white px-6 py-4 rounded-xl shadow-lg flex items-center space-x-3">
             <CheckCircle className="w-5 h-5" />
-            <span>{successMessage}</span>
+            <span className="font-medium">{successMessage}</span>
           </div>
         </div>
       )}
@@ -221,13 +256,22 @@ function ReparacionesActivas() {
             {activeOrders.length} reparaciones en curso
           </p>
         </div>
-        <button
-          onClick={() => navigate('/nueva-recepcion')}
-          className="btn-primary flex items-center space-x-2"
-        >
-          <Package className="w-4 h-4" />
-          <span>Nueva recepción</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => window.location.reload()}
+            className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            title="Actualizar"
+          >
+            <RefreshCw className="w-4 h-4 text-gray-600" />
+          </button>
+          <button
+            onClick={() => navigate('/nueva-recepcion')}
+            className="btn-primary flex items-center space-x-2"
+          >
+            <Package className="w-4 h-4" />
+            <span>Nueva recepción</span>
+          </button>
+        </div>
       </div>
 
       {/* Filtros y búsqueda */}
@@ -343,19 +387,15 @@ function ReparacionesActivas() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {!isRejected ? (
-                          <button
-                            onClick={() => openStatusModal(order, order.status)}
-                            className={`text-xs px-2 py-1 rounded-full border ${getStatusColor(order.status)} hover:opacity-80 transition-opacity flex items-center space-x-1`}
-                          >
-                            <span>{order.status}</span>
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                        ) : (
-                          <span className={`text-xs px-2 py-1 rounded-full border ${getStatusColor(order.status)}`}>
-                            {order.status}
-                          </span>
-                        )}
+                        {/* 🔥 CORREGIDO: Siempre mostramos el botón, incluso para rechazado */}
+                        <button
+                          onClick={() => openStatusModal(order, order.status)}
+                          className={`text-xs px-2 py-1 rounded-full border ${getStatusColor(order.status)} hover:opacity-80 transition-opacity flex items-center space-x-1`}
+                          disabled={isUpdating}
+                        >
+                          <span>{order.status}</span>
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {order.budget ? (
@@ -398,6 +438,7 @@ function ReparacionesActivas() {
                               onClick={() => handleMarkAsReady(order)}
                               className="p-1 hover:bg-green-100 rounded-lg transition-colors"
                               title="Marcar como listo"
+                              disabled={isUpdating}
                             >
                               <CheckCircle className="w-4 h-4 text-green-600" />
                             </button>
@@ -408,6 +449,7 @@ function ReparacionesActivas() {
                               onClick={() => handleMarkAsRejected(order)}
                               className="p-1 hover:bg-red-100 rounded-lg transition-colors"
                               title="Rechazar presupuesto"
+                              disabled={isUpdating}
                             >
                               <XCircle className="w-4 h-4 text-red-600" />
                             </button>
@@ -455,6 +497,7 @@ function ReparacionesActivas() {
                   onChange={(e) => setNewStatus(e.target.value)}
                   className="input-field"
                   autoFocus
+                  disabled={isUpdating}
                 >
                   <option value="Recibido">📦 Recibido</option>
                   <option value="En análisis">🔍 En análisis</option>
@@ -478,6 +521,7 @@ function ReparacionesActivas() {
                   rows="3"
                   className="input-field"
                   placeholder="Añadir observación sobre este cambio..."
+                  disabled={isUpdating}
                 />
               </div>
 
@@ -488,7 +532,7 @@ function ReparacionesActivas() {
                   <div>
                     <p className="text-sm font-medium text-red-800">Rechazar presupuesto</p>
                     <p className="text-xs text-red-700">
-                      Al rechazar, la reparación se archivará y no pasará a taller.
+                      Al rechazar, el presupuesto se marcará como rechazado pero la reparación seguirá activa.
                     </p>
                   </div>
                 </div>
@@ -531,6 +575,7 @@ function ReparacionesActivas() {
                   setStatusNote('');
                 }}
                 className="btn-secondary"
+                disabled={isUpdating}
               >
                 Cancelar
               </button>
@@ -538,56 +583,41 @@ function ReparacionesActivas() {
               {newStatus === 'Entregado' ? (
                 <button
                   onClick={handleDelivered}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                  disabled={isUpdating}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
                 >
-                  <CheckCircle className="w-4 h-4" />
-                  <span>Confirmar entrega</span>
+                  {isUpdating ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Procesando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Confirmar entrega</span>
+                    </>
+                  )}
                 </button>
               ) : (
                 <button
                   onClick={confirmStatusChange}
-                  disabled={!newStatus || newStatus === selectedOrder.status}
-                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!newStatus || newStatus === selectedOrder.status || isUpdating}
+                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
-                  Confirmar cambio
+                  {isUpdating ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Actualizando...</span>
+                    </>
+                  ) : (
+                    <span>Confirmar cambio</span>
+                  )}
                 </button>
               )}
             </div>
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes slide-down {
-          from {
-            transform: translateY(-100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        
-        @keyframes slide-up {
-          from {
-            transform: translateY(50px);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        
-        .animate-slide-down {
-          animation: slide-down 0.3s ease-out;
-        }
-        
-        .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }

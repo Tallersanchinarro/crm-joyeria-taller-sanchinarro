@@ -11,7 +11,6 @@ import {
   AlertCircle,
   Clock,
   Wrench,
-  Link as LinkIcon,
   Edit,
   BarChart,
   MessageCircle,
@@ -24,10 +23,10 @@ import {
   Copy,
   Send,
   Share2,
-  Tag,
   Euro,
   FileDown,
-  Paperclip
+  Paperclip,
+  Eye
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { generateReceptionPDF } from '../utils/pdfGenerator';
@@ -35,6 +34,17 @@ import TrabajosPorFamilia from '../components/orders/TrabajosPorFamilia';
 import FallosPorFamilia from '../components/orders/FallosPorFamilia';
 import TrazabilidadTimeline from '../components/orders/TrazabilidadTimeline';
 import { supabase } from '../lib/supabaseClient';
+
+// Datos de la empresa
+const EMPRESA = {
+  nombre: 'LAM-RELOJEROS S.L',
+  cif: 'B-88615489',
+  telefono: '672373275',
+  direccion: 'C/ Ejemplo, 123',
+  ciudad: '28001 Madrid'
+};
+
+const IVA_PORCENTAJE = 21;
 
 function DetalleReparacion() {
   const { id } = useParams();
@@ -46,14 +56,10 @@ function DetalleReparacion() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('trabajos');
   
-  // Estados para trabajos y fallos seleccionados
   const [trabajosSeleccionados, setTrabajosSeleccionados] = useState([]);
   const [fallosSeleccionados, setFallosSeleccionados] = useState([]);
-  
-  // Estado para familias de trabajos (dinámico)
   const [familiasTrabajos, setFamiliasTrabajos] = useState([]);
   
-  // Estados para diagnóstico
   const [diagnosis, setDiagnosis] = useState({
     observaciones: '',
     recomendaciones: '',
@@ -61,7 +67,6 @@ function DetalleReparacion() {
     urgencia: 'normal'
   });
   
-  // Estados para UI
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetDiscount, setBudgetDiscount] = useState(0);
   const [budgetDiscountType, setBudgetDiscountType] = useState('porcentaje');
@@ -72,7 +77,6 @@ function DetalleReparacion() {
   const [budgetLink, setBudgetLink] = useState(null);
   const [copySuccess, setCopySuccess] = useState('');
 
-  // Pestañas principales
   const tabs = [
     { id: 'editar', label: 'EDITAR', icon: Edit },
     { id: 'fallos', label: 'FALLOS', icon: AlertTriangle },
@@ -83,7 +87,6 @@ function DetalleReparacion() {
     { id: 'conversacion', label: 'CONVERSACIÓN', icon: MessageCircle }
   ];
 
-  // Cargar familias de trabajos desde Supabase
   useEffect(() => {
     const cargarFamilias = async () => {
       const { data } = await supabase
@@ -95,7 +98,6 @@ function DetalleReparacion() {
     cargarFamilias();
   }, []);
 
-  // Cargar orden y cliente
   useEffect(() => {
     if (orders.length > 0) {
       const foundOrder = orders.find(o => o.id === id);
@@ -112,7 +114,6 @@ function DetalleReparacion() {
     }
   }, [id, orders, clients]);
 
-  // Calcular contadores por familia (dinámico)
   const contadoresPorFamilia = React.useMemo(() => {
     const contadores = {};
     trabajosSeleccionados.forEach(t => {
@@ -149,30 +150,36 @@ function DetalleReparacion() {
     setTimeout(() => setShowSuccessMessage(false), 3000);
   };
 
-  // Calcular totales en tiempo real
+  // Calcular totales con IVA
   const calcularTotales = () => {
     const trabajosTotal = trabajosSeleccionados.reduce((sum, t) => {
       return sum + (t.total || t.tarifa_aplicada * (t.cantidad || 1) || 0);
     }, 0);
     
     const fallosTotal = fallosSeleccionados.reduce((sum, f) => sum + (f.total || 0), 0);
-    const subtotal = trabajosTotal + fallosTotal;
+    const subtotalConIVA = trabajosTotal + fallosTotal;
     
     let descuentoAplicado = 0;
     if (budgetDiscount > 0) {
       if (budgetDiscountType === 'porcentaje') {
-        descuentoAplicado = subtotal * (budgetDiscount / 100);
+        descuentoAplicado = subtotalConIVA * (budgetDiscount / 100);
       } else {
-        descuentoAplicado = Math.min(budgetDiscount, subtotal);
+        descuentoAplicado = Math.min(budgetDiscount, subtotalConIVA);
       }
     }
+    
+    const totalConIVA = subtotalConIVA - descuentoAplicado;
+    const baseImponible = totalConIVA / (1 + IVA_PORCENTAJE / 100);
+    const iva = totalConIVA - baseImponible;
     
     return {
       trabajos: trabajosTotal,
       fallos: fallosTotal,
-      subtotal,
+      subtotalConIVA,
       descuento: descuentoAplicado,
-      total: subtotal - descuentoAplicado
+      totalConIVA,
+      baseImponible,
+      iva
     };
   };
 
@@ -180,17 +187,10 @@ function DetalleReparacion() {
 
   const guardarPresupuesto = async () => {
     try {
-      console.log('💾 Guardando presupuesto:', {
-        trabajos: trabajosSeleccionados,
-        fallos: fallosSeleccionados,
-        total: totales.total
-      });
-      
-      // Actualizar la orden
       await updateOrder(order.id, {
         trabajos: trabajosSeleccionados,
         fallos: fallosSeleccionados,
-        budget: totales.total,
+        budget: totales.totalConIVA,
         budget_discount: totales.descuento,
         budget_notes: budgetNotes,
         budget_status: 'pendiente',
@@ -198,24 +198,12 @@ function DetalleReparacion() {
         budget_date: new Date().toISOString()
       });
       
-      // Cerrar modal de presupuesto
       setShowBudgetModal(false);
-      
-      // Mostrar mensaje de éxito
       setSuccessMessage('✅ Presupuesto generado correctamente');
       setShowSuccessMessage(true);
       
-      // Generar enlace automáticamente
-      setTimeout(async () => {
-        try {
-          const link = await generateBudgetLink(order.id);
-          setBudgetLink(link);
-          setShowLinkModal(true);
-          setShowSuccessMessage(false);
-        } catch (error) {
-          console.error('Error generando enlace:', error);
-          alert('Presupuesto guardado pero error al generar enlace: ' + error.message);
-        }
+      setTimeout(() => {
+        navigate(`/presupuesto/taller/${order.id}`);
       }, 1500);
       
     } catch (error) {
@@ -224,20 +212,14 @@ function DetalleReparacion() {
     }
   };
 
-  const handleGenerateLink = async () => {
-    try {
-      const link = await generateBudgetLink(order.id);
-      setBudgetLink(link);
-      setShowLinkModal(true);
-    } catch (error) {
-      alert('Error: ' + error.message);
-    }
-  };
-
   const generatePDF = (type) => {
     if (order && client) {
       generateReceptionPDF(order, client, type);
     }
+  };
+
+  const handleViewBudget = () => {
+    navigate(`/presupuesto/taller/${order.id}`);
   };
 
   if (loading) {
@@ -280,35 +262,35 @@ function DetalleReparacion() {
         </div>
       )}
 
-      {/* Header superior */}
-      <div className="bg-gradient-to-r from-gray-900 to-gray-800 text-white sticky top-0 z-40 shadow-lg">
+      {/* Header superior - Diseño profesional blanco/negro */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto">
           {/* Primera línea: Estado y navegación */}
-          <div className="px-6 py-3 flex items-center justify-between border-b border-gray-700">
+          <div className="px-6 py-3 flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button 
                 onClick={() => navigate('/reparaciones-activas')}
-                className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors"
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-5 h-5 text-gray-600" />
               </button>
               <div className="flex items-center space-x-3">
-                <span className="text-sm text-gray-400">Home / Reparaciones /</span>
-                <span className="font-bold text-white bg-gray-700 px-3 py-1 rounded-lg">
+                <span className="text-sm text-gray-500">Home / Reparaciones /</span>
+                <span className="font-bold text-gray-800 bg-gray-100 px-3 py-1 rounded-lg">
                   REPARACIÓN - {order.order_number}
                 </span>
               </div>
             </div>
             <div className="flex items-center space-x-3">
-              <span className="bg-blue-500/20 text-blue-300 px-4 py-1.5 rounded-full text-sm font-medium border border-blue-500/30">
-                ⚡ ENVIADO. PENDIENTE DE CONTESTAR
+              <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                {order.status}
               </span>
             </div>
           </div>
 
           {/* Segunda línea: Mensaje de actualización */}
-          <div className="px-6 py-2 bg-yellow-500/10 border-b border-yellow-500/20">
-            <div className="flex items-center text-sm text-yellow-300">
+          <div className="px-6 py-2 bg-yellow-50 border-b border-yellow-200">
+            <div className="flex items-center text-sm text-yellow-700">
               <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
               <p>
                 Si quiere actualizar esta reparación, debe ir al último presupuesto asociado y rechazarlo.
@@ -317,25 +299,25 @@ function DetalleReparacion() {
           </div>
 
           {/* Tercera línea: Info rápida */}
-          <div className="px-6 py-3 flex items-center justify-between">
+          <div className="px-6 py-3 flex items-center justify-between bg-gray-50">
             <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
-                  <User className="w-5 h-5 text-gray-300" />
+                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-400">Cliente</p>
-                  <p className="font-medium">{client.name}</p>
+                  <p className="text-sm text-gray-500">Cliente</p>
+                  <p className="font-medium text-gray-800">{client.name}</p>
                 </div>
               </div>
-              <div className="h-8 w-px bg-gray-700"></div>
+              <div className="h-8 w-px bg-gray-300"></div>
               <div className="flex items-center space-x-4">
-                <div className="flex items-center text-sm text-gray-300">
+                <div className="flex items-center text-sm text-gray-600">
                   <Phone className="w-4 h-4 mr-1 text-gray-400" />
                   {client.phone}
                 </div>
                 {client.email && (
-                  <div className="flex items-center text-sm text-gray-300">
+                  <div className="flex items-center text-sm text-gray-600">
                     <Mail className="w-4 h-4 mr-1 text-gray-400" />
                     {client.email}
                   </div>
@@ -343,10 +325,7 @@ function DetalleReparacion() {
               </div>
             </div>
             <div className="flex items-center space-x-2">
-              <span className={`px-3 py-1.5 rounded-full text-xs font-medium border ${getStatusColor(order.status)}`}>
-                {order.status}
-              </span>
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-gray-500">
                 <Clock className="w-4 h-4 inline mr-1" />
                 {new Date(order.created_at).toLocaleDateString()}
               </span>
@@ -380,13 +359,22 @@ function DetalleReparacion() {
                 </button>
               );
             })}
+            
+            {order.status === 'Presupuestado' && (
+              <button
+                onClick={handleViewBudget}
+                className="flex items-center space-x-2 px-5 py-4 text-sm font-medium text-green-600 border-b-2 border-green-500 hover:bg-green-50 transition-all ml-auto"
+              >
+                <Eye className="w-4 h-4" />
+                <span>VER PRESUPUESTO</span>
+              </button>
+            )}
           </div>
 
           <div className="p-6">
             {/* PESTAÑA TRABAJOS */}
             {activeTab === 'trabajos' && (
               <div className="space-y-6">
-                {/* Leyenda de familias */}
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
                     <h3 className="font-medium text-gray-700 flex items-center">
@@ -427,7 +415,6 @@ function DetalleReparacion() {
                   trabajosIniciales={trabajosSeleccionados}
                 />
                 
-                {/* Botones de acción */}
                 <div className="flex justify-end space-x-3">
                   <button
                     onClick={guardarDiagnostico}
@@ -437,13 +424,23 @@ function DetalleReparacion() {
                     <span>Guardar diagnóstico</span>
                   </button>
                   
-                  {(trabajosSeleccionados.length > 0 || fallosSeleccionados.length > 0) && (
+                  {(trabajosSeleccionados.length > 0 || fallosSeleccionados.length > 0) && order.status !== 'Presupuestado' && (
                     <button
                       onClick={() => setShowBudgetModal(true)}
                       className="px-6 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 flex items-center space-x-2 transition-all shadow-md hover:shadow-lg font-medium"
                     >
                       <FileText className="w-4 h-4" />
                       <span>Generar presupuesto</span>
+                    </button>
+                  )}
+
+                  {order.status === 'Presupuestado' && (
+                    <button
+                      onClick={handleViewBudget}
+                      className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 flex items-center space-x-2 transition-all shadow-md hover:shadow-lg font-medium"
+                    >
+                      <Eye className="w-4 h-4" />
+                      <span>Ver presupuesto</span>
                     </button>
                   )}
                 </div>
@@ -525,115 +522,162 @@ function DetalleReparacion() {
         </div>
       </div>
 
-      {/* MODAL DE PRESUPUESTO */}
+      {/* MODAL DE PRESUPUESTO - VERSIÓN PROFESIONAL */}
       {showBudgetModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
-            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-gray-800">Generar presupuesto</h3>
-              <button onClick={() => setShowBudgetModal(false)} className="p-2 hover:bg-gray-100 rounded-full">
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl animate-scale-up">
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-6 rounded-t-2xl border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-primary-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-800">Generar presupuesto</h3>
+                    <p className="text-sm text-gray-500">Revisa los detalles antes de continuar</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowBudgetModal(false)} 
+                  className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
             </div>
             
-            <div className="p-6 space-y-4">
-              {/* Resumen de totales */}
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Total trabajos:</span>
-                    <span className="font-medium">{totales.trabajos.toFixed(2)}€</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Total fallos:</span>
-                    <span className="font-medium">{totales.fallos.toFixed(2)}€</span>
-                  </div>
-                  <div className="border-t border-gray-200 my-2 pt-2">
-                    <div className="flex justify-between font-bold">
-                      <span>Subtotal:</span>
-                      <span className="text-gray-800">{totales.subtotal.toFixed(2)}€</span>
+            <div className="p-6 space-y-6">
+              {/* Resumen de trabajos */}
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="font-medium text-gray-700 text-sm">Trabajos seleccionados</h4>
+                  <span className="text-xs text-gray-500">{trabajosSeleccionados.length} ítems</span>
+                </div>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {trabajosSeleccionados.slice(0, 4).map((t, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span className="text-gray-600">{t.nombre}</span>
+                      <span className="font-medium">{(t.total || t.tarifa_aplicada || 0).toFixed(2)}€</span>
+                    </div>
+                  ))}
+                  {trabajosSeleccionados.length > 4 && (
+                    <p className="text-xs text-gray-400 text-center pt-1">
+                      + {trabajosSeleccionados.length - 4} trabajos más
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Cálculo con IVA */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-600">Subtotal (IVA incluido)</span>
+                  <span className="font-medium">{totales.subtotalConIVA.toFixed(2)}€</span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-gray-600">Descuento</span>
+                    <div className="flex bg-gray-100 rounded-lg p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setBudgetDiscountType('porcentaje')}
+                        className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                          budgetDiscountType === 'porcentaje' 
+                            ? 'bg-white shadow-sm text-primary-600' 
+                            : 'text-gray-500'
+                        }`}
+                      >
+                        %
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBudgetDiscountType('euros')}
+                        className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                          budgetDiscountType === 'euros' 
+                            ? 'bg-white shadow-sm text-primary-600' 
+                            : 'text-gray-500'
+                        }`}
+                      >
+                        €
+                      </button>
                     </div>
                   </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="number"
+                      value={budgetDiscount}
+                      onChange={(e) => setBudgetDiscount(parseFloat(e.target.value) || 0)}
+                      className="w-20 text-right px-2 py-1 border border-gray-200 rounded-lg focus:ring-1 focus:ring-primary-500 text-sm"
+                      placeholder="0"
+                      min="0"
+                      max={budgetDiscountType === 'porcentaje' ? "100" : totales.subtotalConIVA}
+                    />
+                    {budgetDiscountType === 'porcentaje' && <span className="text-sm text-gray-500">%</span>}
+                  </div>
                 </div>
-              </div>
-
-              {/* Selector de tipo de descuento */}
-              <div className="flex space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setBudgetDiscountType('porcentaje')}
-                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium ${
-                    budgetDiscountType === 'porcentaje'
-                      ? 'bg-primary-50 border-primary-300 text-primary-700'
-                      : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <Percent className="w-4 h-4 inline mr-1" /> %
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBudgetDiscountType('euros')}
-                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium ${
-                    budgetDiscountType === 'euros'
-                      ? 'bg-primary-50 border-primary-300 text-primary-700'
-                      : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <Euro className="w-4 h-4 inline mr-1" /> €
-                </button>
-              </div>
-
-              <input
-                type="number"
-                value={budgetDiscount}
-                onChange={(e) => setBudgetDiscount(parseFloat(e.target.value) || 0)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                placeholder={budgetDiscountType === 'porcentaje' ? 'Descuento %' : 'Descuento €'}
-                min="0"
-                max={budgetDiscountType === 'porcentaje' ? "100" : totales.subtotal}
-              />
-
-              <textarea
-                value={budgetNotes}
-                onChange={(e) => setBudgetNotes(e.target.value)}
-                rows="3"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                placeholder="Notas del presupuesto..."
-              />
-
-              <div className="bg-primary-50 p-4 rounded-xl border border-primary-200">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-primary-800">TOTAL:</span>
-                  <span className="text-2xl font-bold text-primary-600">{totales.total.toFixed(2)}€</span>
-                </div>
+                
                 {totales.descuento > 0 && (
-                  <p className="text-xs text-primary-600 mt-1">
-                    Descuento aplicado: -{totales.descuento.toFixed(2)}€
-                  </p>
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Descuento aplicado</span>
+                    <span>- {totales.descuento.toFixed(2)}€</span>
+                  </div>
                 )}
+                
+                <div className="border-t border-gray-200 my-2 pt-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Base imponible</span>
+                    <span>{totales.baseImponible.toFixed(2)}€</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600 mt-1">
+                    <span>IVA ({IVA_PORCENTAJE}%)</span>
+                    <span>{totales.iva.toFixed(2)}€</span>
+                  </div>
+                </div>
+                
+                <div className="bg-primary-50 p-4 rounded-xl border border-primary-200">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-primary-800 text-lg">TOTAL (IVA incluido)</span>
+                    <span className="text-2xl font-bold text-primary-600">{totales.totalConIVA.toFixed(2)}€</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowBudgetModal(false)}
-                  className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={guardarPresupuesto}
-                  disabled={totales.total <= 0}
-                  className={`px-6 py-2.5 rounded-lg text-white font-medium ${
-                    totales.total > 0 
-                      ? 'bg-green-600 hover:bg-green-700' 
-                      : 'bg-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  Guardar presupuesto
-                </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notas para el cliente
+                </label>
+                <textarea
+                  value={budgetNotes}
+                  onChange={(e) => setBudgetNotes(e.target.value)}
+                  rows="3"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                  placeholder="Añade información adicional para el cliente (plazo de entrega, condiciones, etc.)..."
+                />
               </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3 bg-gray-50 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setShowBudgetModal(false)}
+                className="px-5 py-2.5 border border-gray-300 rounded-xl hover:bg-gray-100 transition-colors font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={guardarPresupuesto}
+                disabled={totales.subtotalConIVA <= 0}
+                className={`px-5 py-2.5 rounded-xl text-white font-medium transition-all flex items-center space-x-2 ${
+                  totales.subtotalConIVA > 0 
+                    ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 shadow-md hover:shadow-lg' 
+                    : 'bg-gray-400 cursor-not-allowed'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span>Generar presupuesto</span>
+              </button>
             </div>
           </div>
         </div>
