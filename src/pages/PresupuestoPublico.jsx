@@ -19,7 +19,8 @@ import {
   User,
   Package,
   FileText,
-  Shield
+  Shield,
+  Percent
 } from 'lucide-react';
 
 function PresupuestoPublico() {
@@ -32,6 +33,8 @@ function PresupuestoPublico() {
   const [actionTaken, setActionTaken] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
   const [updating, setUpdating] = useState(false);
+
+  const IVA_PORCENTAJE = 21;
 
   useEffect(() => {
     loadBudgetData();
@@ -58,7 +61,7 @@ function PresupuestoPublico() {
         .from('budget_tokens')
         .update({ 
           viewed_at: new Date().toISOString(),
-          ip_address: 'registrado', // En producción podrías obtener la IP real
+          ip_address: 'registrado',
           user_agent: navigator.userAgent
         })
         .eq('id', tokenData.id);
@@ -148,6 +151,33 @@ function PresupuestoPublico() {
     };
     return colores[gravedad] || 'bg-gray-100 text-gray-700';
   };
+
+  // Calcular desglose con IVA
+  const calcularTotales = () => {
+    if (!order) return null;
+    
+    const totalConIVA = order.budget || 0;
+    const descuento = order.budget_discount || 0;
+    
+    // El totalConIVA ya incluye el descuento aplicado
+    const baseImponible = totalConIVA / (1 + IVA_PORCENTAJE / 100);
+    const iva = totalConIVA - baseImponible;
+    
+    // Calcular subtotal antes de descuento (si hay descuento)
+    const subtotalConIVA = totalConIVA + descuento;
+    const subtotalBaseImponible = subtotalConIVA / (1 + IVA_PORCENTAJE / 100);
+    
+    return {
+      totalConIVA,
+      descuento,
+      baseImponible,
+      iva,
+      subtotalConIVA,
+      subtotalBaseImponible
+    };
+  };
+
+  const totales = calcularTotales();
 
   if (loading) {
     return (
@@ -290,7 +320,7 @@ function PresupuestoPublico() {
               </div>
             </div>
 
-            {/* TRABAJOS NECESARIOS - AHORA CON DATOS REALES */}
+            {/* TRABAJOS NECESARIOS */}
             <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-xl p-6 border border-gray-200">
               <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
                 <Wrench className="w-5 h-5 mr-2 text-primary-500" />
@@ -378,35 +408,56 @@ function PresupuestoPublico() {
               </div>
             )}
 
-            {/* TOTAL */}
-            <div className="bg-gradient-to-br from-primary-50 to-primary-100/50 rounded-xl p-6 border-2 border-primary-200">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-primary-200 rounded-xl flex items-center justify-center">
-                    <Euro className="w-6 h-6 text-primary-700" />
+            {/* TOTAL CON DESGLOSE DE IVA */}
+            {totales && (
+              <div className="bg-gradient-to-br from-primary-50 to-primary-100/50 rounded-xl p-6 border-2 border-primary-200">
+                <div className="space-y-3">
+                  {/* Subtotal (antes de descuento) */}
+                  {totales.descuento > 0 && (
+                    <>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600">Subtotal</span>
+                        <span className="font-medium">{totales.subtotalConIVA.toFixed(2)}€</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm text-green-600">
+                        <span>Descuento</span>
+                        <span>- {totales.descuento.toFixed(2)}€</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Base imponible */}
+                  <div className="flex justify-between items-center pt-2 border-t border-primary-200">
+                    <span className="text-gray-600">Base imponible</span>
+                    <span className="font-medium">{totales.baseImponible.toFixed(2)}€</span>
                   </div>
-                  <div>
-                    <p className="text-sm text-primary-600 font-medium">Total presupuesto</p>
-                    <p className="text-3xl font-bold text-primary-700">{order.budget?.toFixed(2)}€</p>
+                  
+                  {/* IVA */}
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600 flex items-center">
+                      <Percent className="w-3 h-3 mr-1" />
+                      IVA ({IVA_PORCENTAJE}%)
+                    </span>
+                    <span>{totales.iva.toFixed(2)}€</span>
+                  </div>
+                  
+                  {/* Total */}
+                  <div className="flex justify-between items-center pt-3 border-t-2 border-primary-300 mt-2">
+                    <span className="font-bold text-primary-800 text-lg">TOTAL (IVA incluido)</span>
+                    <span className="text-2xl font-bold text-primary-600">{totales.totalConIVA.toFixed(2)}€</span>
                   </div>
                 </div>
-                {order.budget_discount > 0 && (
-                  <div className="bg-white px-4 py-2 rounded-lg border border-primary-200">
-                    <p className="text-xs text-primary-600">Descuento aplicado</p>
-                    <p className="font-medium text-primary-700">-{order.budget_discount?.toFixed(2)}€</p>
+                
+                {order.budget_notes && (
+                  <div className="mt-4 pt-4 border-t border-primary-200">
+                    <p className="text-sm text-gray-600 flex items-start">
+                      <Shield className="w-4 h-4 mr-2 text-primary-500 flex-shrink-0 mt-0.5" />
+                      <span>📋 {order.budget_notes}</span>
+                    </p>
                   </div>
                 )}
               </div>
-              
-              {order.budget_notes && (
-                <div className="mt-4 pt-4 border-t border-primary-200">
-                  <p className="text-sm text-gray-600 flex items-start">
-                    <Shield className="w-4 h-4 mr-2 text-primary-500 flex-shrink-0 mt-0.5" />
-                    <span>📋 {order.budget_notes}</span>
-                  </p>
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Botones de acción */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
