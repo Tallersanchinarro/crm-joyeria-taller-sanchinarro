@@ -6,38 +6,38 @@ import {
   Trash2,
   Save,
   X,
-  ChevronDown,
-  ChevronUp,
-  FolderPlus,
   Package,
   DollarSign,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Search,
+  Filter,
+  XCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 function AdminTrabajos() {
   const navigate = useNavigate();
+  const [trabajos, setTrabajos] = useState([]);
   const [familias, setFamilias] = useState([]);
-  const [trabajos, setTrabajos] = useState({});
   const [loading, setLoading] = useState(true);
-  const [familiasAbiertas, setFamiliasAbiertas] = useState({});
-  const [editandoFamilia, setEditandoFamilia] = useState(null);
-  const [editandoTrabajo, setEditandoTrabajo] = useState(null);
+  const [editandoId, setEditandoId] = useState(null);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterFamilia, setFilterFamilia] = useState('todas');
+  const [filterActivo, setFilterActivo] = useState('todos');
 
-  // Estados para nuevo trabajo/familia
-  const [nuevaFamilia, setNuevaFamilia] = useState({ nombre: '', orden: 0 });
-  const [mostrarFormFamilia, setMostrarFormFamilia] = useState(false);
+  // Estado para nuevo trabajo
+  const [mostrarForm, setMostrarForm] = useState(false);
   const [nuevoTrabajo, setNuevoTrabajo] = useState({ 
     familia_id: '', 
     nombre: '', 
     tarifa_base: 0,
-    descripcion: '' 
+    descripcion: '',
+    activo: true
   });
-  const [mostrarFormTrabajo, setMostrarFormTrabajo] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -63,16 +63,7 @@ function AdminTrabajos() {
         .order('nombre');
 
       if (trabajosError) throw trabajosError;
-
-      // Agrupar trabajos por familia
-      const trabajosPorFamilia = {};
-      trabajosData?.forEach(t => {
-        if (!trabajosPorFamilia[t.familia_id]) {
-          trabajosPorFamilia[t.familia_id] = [];
-        }
-        trabajosPorFamilia[t.familia_id].push(t);
-      });
-      setTrabajos(trabajosPorFamilia);
+      setTrabajos(trabajosData || []);
 
     } catch (error) {
       console.error('Error cargando datos:', error);
@@ -82,94 +73,21 @@ function AdminTrabajos() {
     }
   };
 
-  const toggleFamilia = (familiaId) => {
-    setFamiliasAbiertas(prev => ({
-      ...prev,
-      [familiaId]: !prev[familiaId]
-    }));
-  };
+  // Filtrar trabajos
+  const trabajosFiltrados = trabajos.filter(trabajo => {
+    const matchesSearch = 
+      trabajo.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (trabajo.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesFamilia = filterFamilia === 'todas' || trabajo.familia_id === filterFamilia;
+    
+    const matchesActivo = filterActivo === 'todos' || 
+      (filterActivo === 'activo' && trabajo.activo) ||
+      (filterActivo === 'inactivo' && !trabajo.activo);
+    
+    return matchesSearch && matchesFamilia && matchesActivo;
+  });
 
-  // ===== CRUD FAMILIAS =====
-  const crearFamilia = async () => {
-    if (!nuevaFamilia.nombre) {
-      setError('El nombre de la familia es obligatorio');
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('familias_trabajos')
-        .insert([{ 
-          nombre: nuevaFamilia.nombre, 
-          orden: nuevaFamilia.orden || 0 
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setFamilias([...familias, data]);
-      setNuevaFamilia({ nombre: '', orden: 0 });
-      setMostrarFormFamilia(false);
-      setSuccessMessage('Familia creada correctamente');
-      setShowSuccessMessage(true);
-      setTimeout(() => setShowSuccessMessage(false), 3000);
-    } catch (error) {
-      console.error('Error creando familia:', error);
-      setError(error.message);
-    }
-  };
-
-  const actualizarFamilia = async (id, datos) => {
-    try {
-      const { data, error } = await supabase
-        .from('familias_trabajos')
-        .update(datos)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setFamilias(familias.map(f => f.id === id ? data : f));
-      setEditandoFamilia(null);
-      setSuccessMessage('Familia actualizada');
-      setShowSuccessMessage(true);
-      setTimeout(() => setShowSuccessMessage(false), 3000);
-    } catch (error) {
-      console.error('Error actualizando familia:', error);
-      setError(error.message);
-    }
-  };
-
-  const eliminarFamilia = async (id) => {
-    // Verificar si tiene trabajos asociados
-    if (trabajos[id]?.length > 0) {
-      setError('No se puede eliminar una familia con trabajos asociados');
-      return;
-    }
-
-    if (!window.confirm('¿Estás seguro de eliminar esta familia?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('familias_trabajos')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      setFamilias(familias.filter(f => f.id !== id));
-      setSuccessMessage('Familia eliminada');
-      setShowSuccessMessage(true);
-      setTimeout(() => setShowSuccessMessage(false), 3000);
-    } catch (error) {
-      console.error('Error eliminando familia:', error);
-      setError(error.message);
-    }
-  };
-
-  // ===== CRUD TRABAJOS =====
   const crearTrabajo = async () => {
     if (!nuevoTrabajo.nombre || !nuevoTrabajo.familia_id) {
       setError('Nombre y familia son obligatorios');
@@ -191,14 +109,9 @@ function AdminTrabajos() {
 
       if (error) throw error;
 
-      // Actualizar el estado agrupado
-      setTrabajos(prev => ({
-        ...prev,
-        [data.familia_id]: [...(prev[data.familia_id] || []), data]
-      }));
-
-      setNuevoTrabajo({ familia_id: '', nombre: '', tarifa_base: 0, descripcion: '' });
-      setMostrarFormTrabajo(false);
+      setTrabajos([...trabajos, data]);
+      setNuevoTrabajo({ familia_id: '', nombre: '', tarifa_base: 0, descripcion: '', activo: true });
+      setMostrarForm(false);
       setSuccessMessage('Trabajo creado correctamente');
       setShowSuccessMessage(true);
       setTimeout(() => setShowSuccessMessage(false), 3000);
@@ -219,25 +132,8 @@ function AdminTrabajos() {
 
       if (error) throw error;
 
-      // Actualizar en el estado agrupado
-      setTrabajos(prev => {
-        const nuevosTrabajos = { ...prev };
-        // Quitar de la familia anterior si cambió
-        if (datos.familia_id && datos.familia_id !== data.familia_id) {
-          // Esto requeriría más lógica, por simplicidad, recargamos
-          cargarDatos();
-          return prev;
-        }
-        
-        // Actualizar en su familia actual
-        const familiaTrabajos = nuevosTrabajos[data.familia_id] || [];
-        nuevosTrabajos[data.familia_id] = familiaTrabajos.map(t => 
-          t.id === id ? data : t
-        );
-        return nuevosTrabajos;
-      });
-
-      setEditandoTrabajo(null);
+      setTrabajos(trabajos.map(t => t.id === id ? data : t));
+      setEditandoId(null);
       setSuccessMessage('Trabajo actualizado');
       setShowSuccessMessage(true);
       setTimeout(() => setShowSuccessMessage(false), 3000);
@@ -258,8 +154,7 @@ function AdminTrabajos() {
 
       if (error) throw error;
 
-      // Recargar datos para actualizar el estado
-      cargarDatos();
+      setTrabajos(trabajos.filter(t => t.id !== id));
       setSuccessMessage('Trabajo eliminado');
       setShowSuccessMessage(true);
       setTimeout(() => setShowSuccessMessage(false), 3000);
@@ -273,6 +168,11 @@ function AdminTrabajos() {
     await actualizarTrabajo(trabajo.id, { activo: !trabajo.activo });
   };
 
+  const getFamiliaNombre = (familiaId) => {
+    const familia = familias.find(f => f.id === familiaId);
+    return familia?.nombre || 'Sin familia';
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -282,7 +182,7 @@ function AdminTrabajos() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Mensajes de éxito/error */}
       {showSuccessMessage && (
         <div className="fixed top-4 right-4 z-50 animate-slide-down">
@@ -301,96 +201,39 @@ function AdminTrabajos() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Catálogo de Trabajos</h1>
           <p className="text-sm text-gray-500">
-            Gestiona las familias y trabajos predefinidos para reparaciones
+            Gestiona los trabajos predefinidos para reparaciones
           </p>
         </div>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="btn-secondary"
-        >
-          Volver al dashboard
-        </button>
-      </div>
-
-      {/* Botones de acción principales */}
-      <div className="flex space-x-3">
-        <button
-          onClick={() => setMostrarFormFamilia(true)}
-          className="btn-primary flex items-center space-x-2"
-        >
-          <FolderPlus className="w-4 h-4" />
-          <span>Nueva familia</span>
-        </button>
-        <button
-          onClick={() => setMostrarFormTrabajo(true)}
-          className="btn-secondary flex items-center space-x-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nuevo trabajo</span>
-        </button>
-      </div>
-
-      {/* Formulario nueva familia */}
-      {mostrarFormFamilia && (
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-primary-200">
-          <h3 className="font-medium text-gray-800 mb-4">Nueva familia</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre
-              </label>
-              <input
-                type="text"
-                value={nuevaFamilia.nombre}
-                onChange={(e) => setNuevaFamilia({...nuevaFamilia, nombre: e.target.value})}
-                className="input-field"
-                placeholder="Ej: Anillos, Engarces..."
-                autoFocus
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Orden
-              </label>
-              <input
-                type="number"
-                value={nuevaFamilia.orden}
-                onChange={(e) => setNuevaFamilia({...nuevaFamilia, orden: parseInt(e.target.value) || 0})}
-                className="input-field"
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end space-x-2 mt-4">
-            <button
-              onClick={() => setMostrarFormFamilia(false)}
-              className="btn-secondary"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={crearFamilia}
-              className="btn-primary flex items-center space-x-2"
-            >
-              <Save className="w-4 h-4" />
-              <span>Guardar familia</span>
-            </button>
-          </div>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => setMostrarForm(true)}
+            className="btn-primary flex items-center space-x-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nuevo trabajo</span>
+          </button>
+          <button
+            onClick={() => navigate('/admin-familias')}
+            className="btn-secondary flex items-center space-x-2"
+          >
+            <Package className="w-4 h-4" />
+            <span>Gestionar familias</span>
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Formulario nuevo trabajo */}
-      {mostrarFormTrabajo && (
+      {mostrarForm && (
         <div className="bg-white rounded-xl shadow-sm p-6 border border-primary-200">
           <h3 className="font-medium text-gray-800 mb-4">Nuevo trabajo</h3>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Familia
+                Familia *
               </label>
               <select
                 value={nuevoTrabajo.familia_id}
@@ -405,7 +248,7 @@ function AdminTrabajos() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre del trabajo
+                Nombre del trabajo *
               </label>
               <input
                 type="text"
@@ -419,18 +262,21 @@ function AdminTrabajos() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Tarifa base (€)
               </label>
-              <input
-                type="number"
-                value={nuevoTrabajo.tarifa_base}
-                onChange={(e) => setNuevoTrabajo({...nuevoTrabajo, tarifa_base: parseFloat(e.target.value) || 0})}
-                className="input-field"
-                step="0.01"
-                min="0"
-              />
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="number"
+                  value={nuevoTrabajo.tarifa_base}
+                  onChange={(e) => setNuevoTrabajo({...nuevoTrabajo, tarifa_base: parseFloat(e.target.value) || 0})}
+                  className="input-field pl-9"
+                  step="0.01"
+                  min="0"
+                />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Descripción (opcional)
+                Descripción
               </label>
               <input
                 type="text"
@@ -443,7 +289,7 @@ function AdminTrabajos() {
           </div>
           <div className="flex justify-end space-x-2 mt-4">
             <button
-              onClick={() => setMostrarFormTrabajo(false)}
+              onClick={() => setMostrarForm(false)}
               className="btn-secondary"
             >
               Cancelar
@@ -459,217 +305,210 @@ function AdminTrabajos() {
         </div>
       )}
 
-      {/* Listado de familias y trabajos */}
-      <div className="space-y-4">
-        {familias.map(familia => (
-          <div key={familia.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
-            {/* Cabecera de familia */}
-            <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-b">
-              <div className="flex items-center space-x-4 flex-1">
-                <button
-                  onClick={() => toggleFamilia(familia.id)}
-                  className="p-1 hover:bg-gray-200 rounded"
-                >
-                  {familiasAbiertas[familia.id] ? (
-                    <ChevronUp className="w-5 h-5 text-gray-600" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-gray-600" />
-                  )}
-                </button>
-                
-                {editandoFamilia === familia.id ? (
-                  <div className="flex items-center space-x-2 flex-1">
-                    <input
-                      type="text"
-                      defaultValue={familia.nombre}
-                      className="input-field text-sm py-1"
-                      id={`nombre-${familia.id}`}
-                    />
-                    <input
-                      type="number"
-                      defaultValue={familia.orden}
-                      className="input-field text-sm py-1 w-20"
-                      id={`orden-${familia.id}`}
-                    />
-                    <button
-                      onClick={() => {
-                        const nombreInput = document.getElementById(`nombre-${familia.id}`);
-                        const ordenInput = document.getElementById(`orden-${familia.id}`);
-                        actualizarFamilia(familia.id, {
-                          nombre: nombreInput.value,
-                          orden: parseInt(ordenInput.value) || 0
-                        });
-                      }}
-                      className="p-1 text-green-600 hover:bg-green-50 rounded"
-                    >
-                      <Save className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setEditandoFamilia(null)}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <h3 className="font-semibold text-gray-800">{familia.nombre}</h3>
-                    <span className="text-xs text-gray-500">Orden: {familia.orden}</span>
-                    <span className="text-xs bg-gray-200 px-2 py-1 rounded-full">
-                      {trabajos[familia.id]?.length || 0} trabajos
-                    </span>
-                  </>
-                )}
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setEditandoFamilia(familia.id)}
-                  className="p-1 hover:bg-gray-200 rounded"
-                  title="Editar familia"
-                >
-                  <Edit className="w-4 h-4 text-gray-600" />
-                </button>
-                <button
-                  onClick={() => eliminarFamilia(familia.id)}
-                  className="p-1 hover:bg-red-100 rounded"
-                  title="Eliminar familia"
-                >
-                  <Trash2 className="w-4 h-4 text-red-600" />
-                </button>
-              </div>
-            </div>
+      {/* Filtros y búsqueda */}
+      <div className="bg-white rounded-xl shadow-sm p-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Buscar por nombre o descripción..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+          <div className="sm:w-48 relative">
+            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <select
+              value={filterFamilia}
+              onChange={(e) => setFilterFamilia(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 appearance-none bg-white"
+            >
+              <option value="todas">Todas las familias</option>
+              {familias.map(f => (
+                <option key={f.id} value={f.id}>{f.nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:w-36 relative">
+            <select
+              value={filterActivo}
+              onChange={(e) => setFilterActivo(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 appearance-none bg-white"
+            >
+              <option value="todos">Todos</option>
+              <option value="activo">Activos</option>
+              <option value="inactivo">Inactivos</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
-            {/* Lista de trabajos de la familia */}
-            {familiasAbiertas[familia.id] && (
-              <div className="p-4 space-y-2">
-                {trabajos[familia.id]?.map(trabajo => (
-                  <div key={trabajo.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    {editandoTrabajo === trabajo.id ? (
-                      <div className="flex items-center space-x-2 flex-1">
+      {/* Tabla de trabajos */}
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Familia</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Tarifa base</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+               </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {trabajosFiltrados.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-12 text-center">
+                    <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500">No hay trabajos registrados</p>
+                    <button
+                      onClick={() => setMostrarForm(true)}
+                      className="mt-2 text-primary-600 hover:text-primary-700 text-sm font-medium"
+                    >
+                      + Añadir primer trabajo
+                    </button>
+                  </td>
+                </tr>
+              ) : (
+                trabajosFiltrados.map((trabajo) => (
+                  <tr key={trabajo.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4">
+                      {editandoId === trabajo.id ? (
                         <input
                           type="text"
                           defaultValue={trabajo.nombre}
-                          className="input-field text-sm py-1 flex-1"
-                          id={`trabajo-nombre-${trabajo.id}`}
+                          className="input-field text-sm py-1"
+                          id={`nombre-${trabajo.id}`}
                         />
-                        <input
-                          type="number"
-                          defaultValue={trabajo.tarifa_base}
-                          className="input-field text-sm py-1 w-24"
-                          step="0.01"
-                          id={`trabajo-tarifa-${trabajo.id}`}
-                        />
+                      ) : (
+                        <span className="font-medium text-gray-900">{trabajo.nombre}</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {editandoId === trabajo.id ? (
+                        <select
+                          defaultValue={trabajo.familia_id}
+                          className="input-field text-sm py-1"
+                          id={`familia-${trabajo.id}`}
+                        >
+                          {familias.map(f => (
+                            <option key={f.id} value={f.id}>{f.nombre}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-gray-600">{getFamiliaNombre(trabajo.familia_id)}</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {editandoId === trabajo.id ? (
+                        <div className="relative">
+                          <DollarSign className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
+                          <input
+                            type="number"
+                            defaultValue={trabajo.tarifa_base}
+                            className="input-field text-sm py-1 pl-7 w-24 text-right"
+                            step="0.01"
+                            id={`tarifa-${trabajo.id}`}
+                          />
+                        </div>
+                      ) : (
+                        <span className="font-medium text-primary-600">{trabajo.tarifa_base}€</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {editandoId === trabajo.id ? (
                         <input
                           type="text"
                           defaultValue={trabajo.descripcion || ''}
-                          className="input-field text-sm py-1 flex-1"
-                          id={`trabajo-desc-${trabajo.id}`}
+                          className="input-field text-sm py-1"
+                          id={`desc-${trabajo.id}`}
                           placeholder="Descripción"
                         />
-                        <select
-                          defaultValue={trabajo.activo ? 'activo' : 'inactivo'}
-                          className="input-field text-sm py-1 w-24"
-                          id={`trabajo-activo-${trabajo.id}`}
-                        >
-                          <option value="activo">Activo</option>
-                          <option value="inactivo">Inactivo</option>
-                        </select>
-                        <button
-                          onClick={() => {
-                            const nombre = document.getElementById(`trabajo-nombre-${trabajo.id}`).value;
-                            const tarifa = parseFloat(document.getElementById(`trabajo-tarifa-${trabajo.id}`).value) || 0;
-                            const desc = document.getElementById(`trabajo-desc-${trabajo.id}`).value;
-                            const activo = document.getElementById(`trabajo-activo-${trabajo.id}`).value === 'activo';
-                            actualizarTrabajo(trabajo.id, {
-                              nombre,
-                              tarifa_base: tarifa,
-                              descripcion: desc,
-                              activo
-                            });
-                          }}
-                          className="p-1 text-green-600 hover:bg-green-50 rounded"
-                        >
-                          <Save className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setEditandoTrabajo(null)}
-                          className="p-1 text-red-600 hover:bg-red-50 rounded"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                      ) : (
+                        <span className="text-gray-500 text-sm">{trabajo.descripcion || '-'}</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                        trabajo.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {trabajo.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center space-x-2">
+                        {editandoId === trabajo.id ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                const nombre = document.getElementById(`nombre-${trabajo.id}`).value;
+                                const familiaId = document.getElementById(`familia-${trabajo.id}`).value;
+                                const tarifa = parseFloat(document.getElementById(`tarifa-${trabajo.id}`).value) || 0;
+                                const desc = document.getElementById(`desc-${trabajo.id}`).value;
+                                actualizarTrabajo(trabajo.id, {
+                                  nombre,
+                                  familia_id: familiaId,
+                                  tarifa_base: tarifa,
+                                  descripcion: desc
+                                });
+                              }}
+                              className="p-1 text-green-600 hover:bg-green-50 rounded"
+                              title="Guardar"
+                            >
+                              <Save className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setEditandoId(null)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded"
+                              title="Cancelar"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => setEditandoId(trabajo.id)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                              title="Editar"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => eliminarTrabajo(trabajo.id)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => toggleActivo(trabajo)}
+                              className={`p-1 rounded ${
+                                trabajo.activo ? 'text-yellow-600 hover:bg-yellow-50' : 'text-green-600 hover:bg-green-50'
+                              }`}
+                              title={trabajo.activo ? 'Desactivar' : 'Activar'}
+                            >
+                              {trabajo.activo ? (
+                                <XCircle className="w-4 h-4" />
+                              ) : (
+                                <CheckCircle className="w-4 h-4" />
+                              )}
+                            </button>
+                          </>
+                        )}
                       </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center space-x-4 flex-1">
-                          <span className="text-sm text-gray-800">{trabajo.nombre}</span>
-                          <span className="text-sm font-medium text-primary-600">{trabajo.tarifa_base}€</span>
-                          {trabajo.descripcion && (
-                            <span className="text-xs text-gray-500">{trabajo.descripcion}</span>
-                          )}
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            trabajo.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {trabajo.activo ? 'Activo' : 'Inactivo'}
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => setEditandoTrabajo(trabajo.id)}
-                            className="p-1 hover:bg-gray-200 rounded"
-                          >
-                            <Edit className="w-4 h-4 text-gray-600" />
-                          </button>
-                          <button
-                            onClick={() => eliminarTrabajo(trabajo.id)}
-                            className="p-1 hover:bg-red-100 rounded"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </button>
-                          <button
-                            onClick={() => toggleActivo(trabajo)}
-                            className={`p-1 rounded ${
-                              trabajo.activo ? 'hover:bg-yellow-100' : 'hover:bg-green-100'
-                            }`}
-                          >
-                            {trabajo.activo ? (
-                              <XCircle className="w-4 h-4 text-yellow-600" />
-                            ) : (
-                              <CheckCircle className="w-4 h-4 text-green-600" />
-                            )}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-
-                {(!trabajos[familia.id] || trabajos[familia.id].length === 0) && (
-                  <p className="text-center text-gray-400 py-4 text-sm">
-                    No hay trabajos en esta familia
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-
-      <style jsx>{`
-        @keyframes slide-down {
-          from {
-            transform: translateY(-100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        .animate-slide-down {
-          animation: slide-down 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }
