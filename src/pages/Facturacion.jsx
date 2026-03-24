@@ -5,32 +5,33 @@ import {
   FileText,
   Download,
   Search,
-  Calendar,
   Euro,
   CheckCircle,
   AlertCircle,
-  Printer,
   Eye,
-  PlusCircle,
-  Filter,
-  X
+  X,
+  Loader,
+  DollarSign
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabaseClient';
+import { generateFacturaPDF } from '../utils/pdfGeneratorFactura';
 
 function Facturacion() {
   const navigate = useNavigate();
-  const { orders, clients } = useApp();
+  const { orders, clients, updateOrder } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [downloading, setDownloading] = useState(false);
 
   // Órdenes entregadas que se pueden facturar
   const deliveredOrders = orders.filter(o => 
-    o.status === 'Entregado' && o.budget > 0 && !o.invoiced
+    o.status === 'Entregado' && !o.invoiced && o.budget > 0
   );
 
   // Filtrar órdenes
@@ -47,14 +48,14 @@ function Facturacion() {
   useEffect(() => {
     const loadInvoices = async () => {
       try {
+        setLoading(true);
         const { data, error } = await supabase
           .from('facturas')
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!error) {
-          setInvoices(data || []);
-        }
+        if (error) throw error;
+        setInvoices(data || []);
       } catch (error) {
         console.error('Error cargando facturas:', error);
       } finally {
@@ -69,10 +70,16 @@ function Facturacion() {
     if (!selectedOrder) return;
     
     setGenerating(true);
+    setError(null);
     
     try {
       const client = clients.find(c => c.id === selectedOrder.client_id);
       const numeroFactura = `F${new Date().getFullYear()}${String(invoices.length + 1).padStart(4, '0')}`;
+      
+      // Calcular base imponible e IVA
+      const totalConIVA = selectedOrder.budget;
+      const baseImponible = totalConIVA / 1.21;
+      const iva = totalConIVA - baseImponible;
       
       const facturaData = {
         order_id: selectedOrder.id,
@@ -83,43 +90,60 @@ function Facturacion() {
         cliente_direccion: client?.address || '',
         cliente_email: client?.email || selectedOrder.client_email,
         concepto: `Reparación de ${selectedOrder.item_type} - ${selectedOrder.order_number}`,
-        base_imponible: selectedOrder.budget / 1.21,
-        iva: selectedOrder.budget - (selectedOrder.budget / 1.21),
-        total: selectedOrder.budget,
-        estado: 'pagada',
-        created_at: new Date().toISOString()
+        base_imponible: baseImponible,
+        iva: iva,
+        total: totalConIVA,
+        estado: 'pagada'
       };
 
-      // Guardar en Supabase (crear tabla facturas si no existe)
-      const { error } = await supabase
+      // Guardar en Supabase
+      const { data, error } = await supabase
         .from('facturas')
-        .insert([facturaData]);
+        .insert([facturaData])
+        .select();
 
-      if (error) {
-        // Si la tabla no existe, mostrar mensaje
-        console.log('Tabla facturas no existe, guardando localmente');
-        const localInvoices = JSON.parse(localStorage.getItem('facturas') || '[]');
-        localInvoices.unshift({ ...facturaData, id: Date.now() });
-        localStorage.setItem('facturas', JSON.stringify(localInvoices));
-        setInvoices(localInvoices);
-      } else {
-        setInvoices(prev => [facturaData, ...prev]);
-      }
+      if (error) throw error;
 
       // Marcar orden como facturada
-      await supabase
-        .from('ordenes')
-        .update({ invoiced: true })
-        .eq('id', selectedOrder.id);
+      await updateOrder(selectedOrder.id, { invoiced: true });
 
+      // Actualizar lista de facturas
+      setInvoices([facturaData, ...invoices]);
+      
       setShowInvoiceModal(false);
       setSelectedOrder(null);
       
+      alert('✅ Factura generada correctamente');
+      
     } catch (error) {
-      console.error('Error generando factura:', error);
-      alert('Error al generar la factura');
+      console.error('Error:', error);
+      setError(error.message);
+      alert('Error al generar la factura: ' + error.message);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  // Función para descargar PDF de factura
+  const descargarFacturaPDF = async (factura) => {
+    setDownloading(true);
+    try {
+      // Buscar la orden asociada
+      const order = orders.find(o => o.id === factura.order_id);
+      const client = clients.find(c => c.id === order?.client_id) || {
+        name: factura.cliente_nombre,
+        phone: '',
+        email: factura.cliente_email,
+        address: factura.cliente_direccion,
+        nif: factura.cliente_nif
+      };
+      
+      await generateFacturaPDF(factura, order, client);
+    } catch (error) {
+      console.error('Error generando PDF:', error);
+      alert('Error al generar el PDF de la factura');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -131,6 +155,14 @@ function Facturacion() {
       year: 'numeric'
     });
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -146,6 +178,14 @@ function Facturacion() {
           </p>
         </div>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center space-x-2">
+          <AlertCircle className="w-5 h-5 text-red-600" />
+          <span className="text-red-700">{error}</span>
+        </div>
+      )}
 
       {/* Buscador */}
       <div className="bg-white rounded-xl shadow-sm p-4">
@@ -173,10 +213,10 @@ function Facturacion() {
             <CheckCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500">No hay órdenes pendientes de facturar</p>
             <button
-              onClick={() => navigate('/reparaciones-activas')}
+              onClick={() => navigate('/historial')}
               className="mt-2 text-primary-600 hover:text-primary-700 text-sm font-medium"
             >
-              Ver reparaciones activas
+              Ver historial
             </button>
           </div>
         ) : (
@@ -234,7 +274,7 @@ function Facturacion() {
             <p className="text-sm text-gray-500">{invoices.length} facturas emitidas</p>
           </div>
           <div className="divide-y divide-gray-200">
-            {invoices.slice(0, 5).map((invoice) => (
+            {invoices.slice(0, 10).map((invoice) => (
               <div key={invoice.id} className="p-4 hover:bg-gray-50">
                 <div className="flex items-center justify-between">
                   <div>
@@ -248,12 +288,21 @@ function Facturacion() {
                     <p className="text-xs text-gray-500">{invoice.concepto}</p>
                   </div>
                   <div className="flex items-center space-x-3">
-                    <p className="font-bold text-primary-600">{invoice.total.toFixed(2)}€</p>
+                    <p className="font-bold text-primary-600">{invoice.total?.toFixed(2)}€</p>
+                    <button 
+                      onClick={() => descargarFacturaPDF(invoice)}
+                      disabled={downloading}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                      title="Descargar PDF"
+                    >
+                      {downloading ? (
+                        <Loader className="w-4 h-4 animate-spin text-gray-500" />
+                      ) : (
+                        <Download className="w-4 h-4 text-gray-500" />
+                      )}
+                    </button>
                     <button className="p-2 hover:bg-gray-100 rounded-lg" title="Ver factura">
                       <Eye className="w-4 h-4 text-gray-500" />
-                    </button>
-                    <button className="p-2 hover:bg-gray-100 rounded-lg" title="Descargar PDF">
-                      <Download className="w-4 h-4 text-gray-500" />
                     </button>
                   </div>
                 </div>
@@ -313,16 +362,14 @@ function Facturacion() {
               <button
                 onClick={generarFactura}
                 disabled={generating}
-                className="px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 flex items-center space-x-2"
+                className="px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 flex items-center space-x-2 disabled:opacity-50"
               >
                 {generating ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white"></div>
+                  <Loader className="w-4 h-4 animate-spin" />
                 ) : (
-                  <>
-                    <FileText className="w-4 h-4" />
-                    <span>Generar factura</span>
-                  </>
+                  <FileText className="w-4 h-4" />
                 )}
+                <span>Generar factura</span>
               </button>
             </div>
           </div>

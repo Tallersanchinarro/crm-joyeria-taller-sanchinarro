@@ -15,7 +15,7 @@ import Clientes from './pages/Clientes';
 import PresupuestoPublico from './pages/PresupuestoPublico';
 import Notificaciones from './pages/Notificaciones';
 import VistaPreviaPresupuesto from './pages/VistaPreviaPresupuesto';
-
+import Facturacion from './pages/Facturacion';
 // Páginas de administración
 import AdminTrabajos from './pages/AdminTrabajos';
 import AdminFallos from './pages/AdminFallos';
@@ -52,7 +52,7 @@ function App() {
                         <Route path="/clientes" element={<Clientes />} />
                         <Route path="/notificaciones" element={<Notificaciones />} />
                         <Route path="/presupuesto/taller/:orderId" element={<VistaPreviaPresupuesto />} />
-
+                        <Route path="/facturacion" element={<Facturacion />} />
 
                         {/* Rutas de administración */}
                         <Route path="/admin-trabajos" element={<AdminTrabajos />} />

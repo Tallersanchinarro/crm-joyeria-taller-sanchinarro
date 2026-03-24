@@ -21,7 +21,8 @@ import {
   Eye,
   MoreVertical,
   Download,
-  Filter
+  Filter,
+  CreditCard
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -36,14 +37,15 @@ function Clientes() {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, name }
-  const [viewMode, setViewMode] = useState('table'); // 'table' o 'cards'
-  const [sortBy, setSortBy] = useState('name'); // 'name', 'date', 'orders'
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [viewMode, setViewMode] = useState('table');
+  const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState('asc');
-  const [filterActive, setFilterActive] = useState(false); // solo clientes con órdenes activas
+  const [filterActive, setFilterActive] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
+    nif: '',
     phone: '',
     email: '',
     address: '',
@@ -79,6 +81,7 @@ function Clientes() {
     let result = clients.filter(client =>
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.phone.includes(searchTerm) ||
+      (client.nif && client.nif.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
@@ -92,6 +95,10 @@ function Clientes() {
         case 'name':
           aValue = a.name.toLowerCase();
           bValue = b.name.toLowerCase();
+          break;
+        case 'nif':
+          aValue = a.nif?.toLowerCase() || '';
+          bValue = b.nif?.toLowerCase() || '';
           break;
         case 'date':
           aValue = new Date(getLastOrderDate(a.id) || 0).getTime();
@@ -169,6 +176,7 @@ function Clientes() {
     setSelectedClient(client);
     setFormData({
       name: client.name,
+      nif: client.nif || '',
       phone: client.phone,
       email: client.email || '',
       address: client.address || '',
@@ -186,14 +194,13 @@ function Clientes() {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', phone: '', email: '', address: '', notes: '' });
+    setFormData({ name: '', nif: '', phone: '', email: '', address: '', notes: '' });
     setSelectedClient(null);
     setError(null);
   };
 
-  // Ver detalles del cliente (podría abrir un modal con historial)
+  // Ver detalles del cliente
   const handleViewClient = (client) => {
-    // Por ahora navega a las reparaciones del cliente
     navigate(`/reparaciones-activas?cliente=${client.id}`);
   };
 
@@ -233,7 +240,7 @@ function Clientes() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="Buscar por nombre, teléfono o email..."
+              placeholder="Buscar por nombre, NIF, teléfono o email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -255,6 +262,7 @@ function Clientes() {
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
             >
               <option value="name">Ordenar por nombre</option>
+              <option value="nif">Ordenar por NIF</option>
               <option value="date">Ordenar por última actividad</option>
               <option value="orders">Ordenar por nº de órdenes</option>
             </select>
@@ -288,6 +296,7 @@ function Clientes() {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">NIF/CIF</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contacto</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Órdenes</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Última actividad</th>
@@ -314,6 +323,9 @@ function Clientes() {
                             )}
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {client.nif || '-'}
                       </td>
                       <td className="px-6 py-4">
                         <div className="space-y-1">
@@ -378,7 +390,7 @@ function Clientes() {
             </table>
           </div>
         ) : (
-          // Vista de tarjetas (para móvil)
+          // Vista de tarjetas
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
             {filteredClients.map((client) => {
               const clientOrders = getClientOrders(client.id);
@@ -393,7 +405,7 @@ function Clientes() {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">{client.name}</p>
-                        <p className="text-xs text-gray-500">{client.phone}</p>
+                        {client.nif && <p className="text-xs text-gray-500">NIF: {client.nif}</p>}
                       </div>
                     </div>
                     {activeOrders > 0 && (
@@ -402,6 +414,10 @@ function Clientes() {
                       </span>
                     )}
                   </div>
+                  <p className="text-sm text-gray-600 flex items-center mb-1">
+                    <Phone className="w-4 h-4 mr-2 text-gray-400" />
+                    {client.phone}
+                  </p>
                   {client.email && (
                     <p className="text-sm text-gray-600 flex items-center mb-2">
                       <Mail className="w-4 h-4 mr-2 text-gray-400" />
@@ -473,7 +489,7 @@ function Clientes() {
         </div>
       )}
 
-      {/* Modal de cliente (igual que antes, pero con mejoras) */}
+      {/* Modal de cliente */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full">
@@ -512,6 +528,23 @@ function Clientes() {
                   placeholder="Ej: María García"
                   autoFocus
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  NIF / CIF
+                </label>
+                <div className="relative">
+                  <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    value={formData.nif}
+                    onChange={(e) => setFormData({...formData, nif: e.target.value})}
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="12345678A / B12345678"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Obligatorio para emitir facturas</p>
               </div>
 
               <div>
