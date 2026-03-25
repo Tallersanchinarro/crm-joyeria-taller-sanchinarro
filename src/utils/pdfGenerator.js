@@ -1,10 +1,36 @@
+import { supabase } from '../lib/supabaseClient';
+
 // Función específica para resguardo de recepción
-export function generateReceptionPDF(order, client, type = 'cliente') {
-  const shopName = 'Taller Relojería El Corte Ingles de Sanchinarro';
-  const shopAddress = 'Calle Margarita de Parma 1';
-  const shopPhone = '+34 672373275';
-  const shopEmail = 'tallersanchinarro@rubiorelojeros.com';
-  const shopCIF = 'B-88615489';
+export async function generateReceptionPDF(order, client, type = 'cliente') {
+  // Cargar configuración para obtener la URL del logo
+  let logoUrl = '/logo-taller.png';
+  let shopName = 'LAM-RELOJEROS S.L';
+  let shopAddress = 'C/ Margarita de Parma 1';
+  let shopPhone = '672373275';
+  let shopEmail = 'tallersanchinarrro@rubiorelojeros.com';
+  let shopCIF = 'B-88615489';
+
+  try {
+    const { data: config, error } = await supabase
+      .from('configuracion')
+      .select('*')
+      .single();
+
+    if (!error && config) {
+      if (config.logo_url) {
+        logoUrl = config.logo_url;
+      }
+      if (config.empresa) {
+        shopName = config.empresa.nombre || shopName;
+        shopAddress = config.empresa.direccion || shopAddress;
+        shopPhone = config.empresa.telefono || shopPhone;
+        shopEmail = config.empresa.email || shopEmail;
+        shopCIF = config.empresa.cif || shopCIF;
+      }
+    }
+  } catch (error) {
+    console.log('Usando datos por defecto');
+  }
 
   const formatDate = (dateString) => {
     if (!dateString) return new Date().toLocaleDateString();
@@ -19,168 +45,152 @@ export function generateReceptionPDF(order, client, type = 'cliente') {
     ? 'RESGUARDO DE RECEPCIÓN - COPIA CLIENTE' 
     : 'RESGUARDO DE RECEPCIÓN - COPIA TALLER';
 
-  const printContent = `
+  // Marca de agua profesional
+  const watermarkText = type === 'cliente' ? 'COPIA CLIENTE' : 'COPIA TALLER';
+
+  const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="UTF-8">
       <title>Resguardo de Recepción - ${order.order_number}</title>
       <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
         body {
           font-family: 'Helvetica', Arial, sans-serif;
-          margin: 0;
-          padding: 25px;
+          background: white;
+          padding: 20px;
           color: #333;
           position: relative;
-          min-height: 100vh;
+        }
+        .container {
+          max-width: 1000px;
+          margin: 0 auto;
+          position: relative;
+          z-index: 1;
         }
         
-        /* MARCA DE AGUA MÁS CLARA */
+        /* MARCA DE AGUA PROFESIONAL */
         .watermark {
           position: fixed;
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%) rotate(-45deg);
-          font-size: 80px;
+          font-size: 70px;
           font-weight: bold;
-          opacity: 0.2; /* Reducido de 0.1 a 0.03 */
-          color: ${type === 'cliente' ? '#0d9488' : '#dc2626'};
-          pointer-events: none;
-          z-index: -1;
+          color: rgba(200, 200, 200, 0.9);
           white-space: nowrap;
-          text-transform: uppercase;
+          pointer-events: none;
+          z-index: 0;
+          font-family: 'Helvetica', Arial, sans-serif;
+          letter-spacing: 5px;
         }
         
-        /* NÚMERO DE ORDEN EN GRANDE */
-        .order-number-box {
-          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-          border: 2px solid #0d9488;
-          border-radius: 15px;
-          padding: 20px;
-          margin: 20px 0 30px 0;
-          text-align: center;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        
-        .order-number-label {
-          font-size: 12px;
-          color: #0d9488;
-          text-transform: uppercase;
-          letter-spacing: 2px;
-          margin-bottom: 10px;
-        }
-        
-        .order-number {
-          font-size: 20px;
-          font-weight: 800;
-          color: #0d9488;
-          text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-          letter-spacing: 2px;
-          font-family: 'Courier New', monospace;
-        }
-        
+        /* HEADER */
         .header {
           display: flex;
-          align-items: center;
           justify-content: space-between;
-          margin-bottom: 20px;
+          align-items: flex-start;
+          margin-bottom: 30px;
           padding-bottom: 20px;
-          border-bottom: 2px solid #0d9488;
-        }
-        .logo-area {
-          flex: 1;
+          border-bottom: 2px solid #333;
         }
         .logo-area img {
-          max-height: 60px;
+          max-height: 80px;
           max-width: 200px;
         }
-        .shop-info {
-          flex: 2;
+        .title-area {
           text-align: right;
         }
-        .shop-name {
-          font-size: 20px;
-          font-weight: bold;
-          color: #0d9488;
-          margin: 0 0 5px 0;
+        .title-area h1 {
+          font-size: 24px;
+          color: #333;
+          margin-bottom: 8px;
         }
-        .shop-detail {
+        .doc-number {
           font-size: 11px;
           color: #666;
           margin: 2px 0;
         }
-        .title {
-          font-size: 16px;
-          font-weight: bold;
-          color: ${type === 'cliente' ? '#0d9488' : '#dc2626'};
-          margin: 20px 0;
-          text-align: center;
-          text-transform: uppercase;
-          background: #f5f5f5;
-          padding: 8px;
-          border-radius: 5px;
-        }
-        .document-number {
-          text-align: right;
-          font-size: 12px;
-          color: #666;
-          margin-bottom: 10px;
-        }
-        .info-grid {
+        
+        /* DATOS */
+        .data-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 20px;
+          gap: 30px;
           margin-bottom: 30px;
         }
-        .info-box {
+        .data-box {
           border: 1px solid #ddd;
           padding: 15px;
           border-radius: 8px;
-          background: #f9f9f9;
+          background: #fafafa;
         }
-        .info-box h3 {
-          margin: 0 0 10px 0;
-          color: #0d9488;
-          font-size: 14px;
+        .data-box h3 {
+          font-size: 13px;
+          color: #333;
+          margin-bottom: 12px;
           border-bottom: 1px solid #ddd;
           padding-bottom: 5px;
         }
-        .info-row {
-          margin: 5px 0;
-          font-size: 12px;
+        .data-row {
+          font-size: 11px;
+          margin: 6px 0;
         }
-        .label {
+        .data-label {
           font-weight: bold;
           color: #555;
           display: inline-block;
-          width: 100px;
+          width: 75px;
         }
-        .jewelry-details {
+        
+        /* JOYA */
+        .joya-section {
           margin-bottom: 30px;
           border: 1px solid #ddd;
-          padding: 15px;
           border-radius: 8px;
+          overflow: hidden;
         }
-        .jewelry-details h3 {
-          margin: 0 0 10px 0;
-          color: #0d9488;
-          font-size: 14px;
+        .joya-header {
+          background: #f5f5f5;
+          padding: 10px 15px;
+          border-bottom: 1px solid #ddd;
+        }
+        .joya-header h3 {
+          font-size: 13px;
+          color: #333;
+        }
+        .joya-content {
+          padding: 15px;
+        }
+        .joya-row {
+          margin: 8px 0;
+          font-size: 11px;
         }
         .description-box {
-          background: #f5f5f5;
-          padding: 15px;
+          background: #f9f9f9;
+          padding: 10px;
           border-radius: 5px;
-          font-size: 13px;
-          margin: 10px 0;
+          margin-top: 8px;
+          font-size: 11px;
+          line-height: 1.4;
         }
-        .footer {
-          margin-top: 50px;
-          text-align: center;
+        
+        /* NOTAS */
+        .notas {
+          margin: 20px 0;
+          padding: 10px;
+          background: #f9f9f9;
+          border-left: 3px solid #333;
           font-size: 10px;
-          color: #999;
-          border-top: 1px solid #ddd;
-          padding-top: 20px;
+          color: #666;
         }
+        
+        /* FIRMAS */
         .signature {
           margin-top: 50px;
           display: grid;
@@ -194,121 +204,112 @@ export function generateReceptionPDF(order, client, type = 'cliente') {
           border-top: 1px solid #333;
           margin-top: 30px;
           padding-top: 5px;
-          font-size: 11px;
+          font-size: 10px;
         }
-        .badge {
-          background: ${type === 'cliente' ? '#0d9488' : '#dc2626'};
-          color: white;
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 11px;
-          display: inline-block;
-          margin-bottom: 15px;
+        
+        /* PIE */
+        .footer {
+          margin-top: 40px;
+          padding-top: 15px;
+          border-top: 1px solid #eee;
+          text-align: center;
+          font-size: 8px;
+          color: #999;
         }
-        .observations {
-          background: #fff3cd;
-          border: 1px solid #ffeeba;
-          padding: 10px;
-          border-radius: 5px;
-          font-size: 11px;
-          margin-top: 15px;
-        }
+        
         @media print {
-          body { margin: 0; padding: 15px; }
-          .watermark { opacity: 0.02; }
+          body { padding: 0; }
+          .watermark { opacity: 0.2; }
         }
       </style>
     </head>
     <body>
-      <!-- MARCA DE AGUA MÁS CLARA -->
-      <div class="watermark">
-        ${type === 'cliente' ? 'CLIENTE' : 'TALLER'}
-      </div>
-
-      <!-- NÚMERO DE ORDEN EN GRANDE -->
-      <div class="order-number-box">
-        <div class="order-number-label">Nº DE RECEPCIÓN</div>
-        <div class="order-number">${order.order_number}</div>
-      </div>
-
-      <div class="document-number">
-        Fecha: ${formatDate(order.created_at)}
-      </div>
-
-      <!-- HEADER CON LOGO -->
-      <div class="header">
-        <div class="logo-area">
-          <img src="/logo-taller.png" alt="Logo del taller" onerror="this.style.display='none'">
-        </div>
-        <div class="shop-info">
-          <p class="shop-name">${shopName}</p>
-          <p class="shop-detail">${shopAddress}</p>
-          <p class="shop-detail">Tel: ${shopPhone} | Email: ${shopEmail}</p>
-          <p class="shop-detail">CIF: ${shopCIF}</p>
-        </div>
-      </div>
-
-      <div class="badge">
-        ${title}
-      </div>
-
-      <div class="info-grid">
-        <div class="info-box">
-          <h3>DATOS DEL CLIENTE</h3>
-          <div class="info-row"><span class="label">Nombre:</span> ${client.name}</div>
-          <div class="info-row"><span class="label">Teléfono:</span> ${client.phone}</div>
-          ${client.email ? `<div class="info-row"><span class="label">Email:</span> ${client.email}</div>` : ''}
-        </div>
-        
-        <div class="info-box">
-          <h3>DATOS DE LA JOYA</h3>
-          <div class="info-row"><span class="label">Tipo:</span> ${order.item_type || 'No especificado'}</div>
-          <div class="info-row"><span class="label">Material:</span> ${order.material || 'No especificado'}</div>
-        </div>
-      </div>
-
-      <div class="jewelry-details">
-        <h3>DESCRIPCIÓN DEL PROBLEMA</h3>
-        <div class="description-box">
-          ${order.description || 'No se especificó'}
-        </div>
-        
-        ${order.observations ? `
-          <h3 style="margin-top: 20px;">OBSERVACIONES</h3>
-          <div class="description-box" style="background: #fff3cd;">
-            ${order.observations}
+      <!-- MARCA DE AGUA PROFESIONAL -->
+      <div class="watermark">${watermarkText}</div>
+      
+      <div class="container">
+        <!-- HEADER -->
+        <div class="header">
+          <div class="logo-area">
+            <img src="${logoUrl}" alt="Logo" onerror="this.style.display='none'">
           </div>
-        ` : ''}
-      </div>
-
-      <div style="margin-bottom: 30px;">
-        <p style="font-size: 12px; color: #666;">
-          <strong>Nota:</strong> La joya queda en el taller para su análisis. 
-          Se generará un presupuesto que será comunicado al cliente.
-        </p>
-      </div>
-
-      <!-- FIRMAS -->
-      <div class="signature">
-        <div class="signature-box">
-          <div class="signature-line">Firma del cliente</div>
+          <div class="title-area">
+            <h1>RESGUARDO DE RECEPCIÓN</h1>
+            <div class="doc-number">Nº ${order.order_number}</div>
+            <div class="doc-number">Fecha: ${formatDate(order.created_at)}</div>
+            <div class="doc-number">${title}</div>
+          </div>
         </div>
-        <div class="signature-box">
-          <div class="signature-line">Firma del taller</div>
-          <p style="font-size: 10px; margin-top: 5px;">${shopName}</p>
-        </div>
-      </div>
 
-      <div class="footer">
-        <p>Documento generado por OrfebreCRM el ${new Date().toLocaleDateString()}</p>
-        <p>${shopName} - ${shopEmail}</p>
+        <!-- DATOS -->
+        <div class="data-grid">
+          <div class="data-box">
+            <h3>DATOS DEL CLIENTE</h3>
+            <div class="data-row"><span class="data-label">Nombre:</span> ${client.name}</div>
+            <div class="data-row"><span class="data-label">Teléfono:</span> ${client.phone}</div>
+            ${client.email ? `<div class="data-row"><span class="data-label">Email:</span> ${client.email}</div>` : ''}
+            ${client.nif ? `<div class="data-row"><span class="data-label">NIF:</span> ${client.nif}</div>` : ''}
+          </div>
+          <div class="data-box">
+            <h3>DATOS DEL TALLER</h3>
+            <div class="data-row"><span class="data-label">Nombre:</span> ${shopName}</div>
+            <div class="data-row"><span class="data-label">Dirección:</span> ${shopAddress}</div>
+            <div class="data-row"><span class="data-label">Teléfono:</span> ${shopPhone}</div>
+            <div class="data-row"><span class="data-label">Email:</span> ${shopEmail}</div>
+            <div class="data-row"><span class="data-label">CIF:</span> ${shopCIF}</div>
+          </div>
+        </div>
+
+        <!-- JOYA -->
+        <div class="joya-section">
+          <div class="joya-header">
+            <h3>JOYA RECIBIDA</h3>
+          </div>
+          <div class="joya-content">
+            <div class="joya-row"><strong>Tipo:</strong> ${order.item_type || 'No especificado'}</div>
+            <div class="joya-row"><strong>Material:</strong> ${order.material || 'No especificado'}</div>
+            <div class="joya-row"><strong>Descripción del problema:</strong></div>
+            <div class="description-box">
+              ${order.description || 'No se especificó'}
+            </div>
+            ${order.observations ? `
+              <div class="joya-row" style="margin-top: 12px;"><strong>Observaciones:</strong></div>
+              <div class="description-box" style="background: #f9f9f9;">
+                ${order.observations}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        <!-- NOTAS -->
+        <div class="notas">
+          <strong>Nota:</strong> La joya queda en el taller para su análisis y presupuesto. 
+          Se generará un presupuesto que será comunicado al cliente para su aprobación antes de iniciar cualquier reparación.
+        </div>
+
+        <!-- FIRMAS -->
+        <div class="signature">
+          <div class="signature-box">
+            <div class="signature-line">Firma del cliente</div>
+            <p style="font-size: 9px; margin-top: 5px;">${formatDate(new Date())}</p>
+          </div>
+          <div class="signature-box">
+            <div class="signature-line">Firma del taller</div>
+            <p style="font-size: 9px; margin-top: 5px;">${shopName}</p>
+          </div>
+        </div>
+
+        <div class="footer">
+          <p>Documento generado por LAMRelojeros el ${formatDate(new Date())}</p>
+          <p>${shopName} · ${shopPhone} · ${shopEmail}</p>
+        </div>
       </div>
     </body>
     </html>
   `;
 
   const printWindow = window.open('', '_blank');
-  printWindow.document.write(printContent);
+  printWindow.document.write(htmlContent);
   printWindow.document.close();
   printWindow.focus();
   

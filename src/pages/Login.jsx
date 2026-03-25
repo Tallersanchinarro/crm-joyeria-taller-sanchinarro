@@ -10,6 +10,9 @@ function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // URL directa del logo desde Supabase Storage
+  const logoUrl = 'https://zregziaibucxzdwuekao.supabase.co/storage/v1/object/public/logos/logo_1774433781354.png';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,10 +38,27 @@ function Login() {
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-teal-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-primary-500 rounded-2xl mb-4 shadow-lg">
-            <Gem className="w-10 h-10 text-white" />
+          {/* Logo con URL directa */}
+          <div className="flex justify-center mb-4">
+            <img 
+              src={logoUrl} 
+              alt="Logo" 
+              className="w-28 h-28 object-contain"
+              onError={(e) => {
+                console.log('Error cargando imagen, mostrando fallback');
+                e.target.style.display = 'none';
+                const fallback = document.getElementById('logo-fallback');
+                if (fallback) fallback.style.display = 'inline-flex';
+              }}
+            />
+            <div 
+              id="logo-fallback"
+              className="hidden inline-flex items-center justify-center w-20 h-20 bg-primary-500 rounded-2xl shadow-lg"
+            >
+              
+            </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">OrfebreCRM</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">LAMRelojeros</h1>
           <p className="text-gray-600">Accede a tu taller de joyería</p>
         </div>
 
@@ -101,8 +121,6 @@ function Login() {
               {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </button>
           </form>
-
-          {/* Eliminado el enlace de registro */}
         </div>
       </div>
     </div>

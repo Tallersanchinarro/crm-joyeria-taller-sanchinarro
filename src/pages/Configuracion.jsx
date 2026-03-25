@@ -15,7 +15,10 @@ import {
   Phone,
   MapPin,
   Globe,
-  CreditCard
+  CreditCard,
+  Upload,
+  Image,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
@@ -23,6 +26,8 @@ function Configuracion() {
   const [activeTab, setActiveTab] = useState('empresa');
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoPreview, setLogoPreview] = useState(null);
   const [config, setConfig] = useState({
     empresa: {
       nombre: 'LAM-RELOJEROS S.L',
@@ -55,6 +60,9 @@ function Configuracion() {
 
         if (!error && data) {
           setConfig(data);
+          if (data.logo_url) {
+            setLogoPreview(data.logo_url);
+          }
         }
       } catch (error) {
         console.log('Usando configuración por defecto');
@@ -70,7 +78,7 @@ function Configuracion() {
     try {
       const { error } = await supabase
         .from('configuracion')
-        .upsert({ id: 1, ...config });
+        .upsert({ id: 1, ...config, logo_url: logoPreview });
 
       if (error) throw error;
 
@@ -81,6 +89,66 @@ function Configuracion() {
       alert('Error al guardar la configuración');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      alert('Solo se permiten imágenes');
+      return;
+    }
+
+    // Validar tamaño (máx 1MB)
+    if (file.size > 1024 * 1024) {
+      alert('La imagen no debe superar 1MB');
+      return;
+    }
+
+    setUploadingLogo(true);
+
+    try {
+      // Generar nombre único para el archivo
+      const fileExt = file.name.split('.').pop();
+      const fileName = `logo_${Date.now()}.${fileExt}`;
+
+      // Subir a Storage
+      const { data, error } = await supabase.storage
+        .from('logos')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      // Obtener URL pública
+      const { data: urlData } = supabase.storage
+        .from('logos')
+        .getPublicUrl(fileName);
+
+      // Actualizar preview
+      setLogoPreview(urlData.publicUrl);
+
+      // Mostrar mensaje de éxito
+      alert('Logo subido correctamente. Guarda los cambios para aplicarlo.');
+
+    } catch (error) {
+      console.error('Error subiendo logo:', error);
+      alert('Error al subir el logo: ' + error.message);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!logoPreview) return;
+
+    if (window.confirm('¿Eliminar el logo actual?')) {
+      setLogoPreview(null);
     }
   };
 
@@ -160,6 +228,52 @@ function Configuracion() {
                 <Building className="w-5 h-5 mr-2 text-primary-500" />
                 Datos de la empresa
               </h3>
+              
+              {/* Sección del logo */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Logo de la empresa
+                </label>
+                <div className="flex items-start space-x-4">
+                  <div className="w-32 h-32 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                    {logoPreview ? (
+                      <img src={logoPreview} alt="Logo" className="max-w-full max-h-full object-contain" />
+                    ) : (
+                      <Image className="w-8 h-8 text-gray-400" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2">
+                      <label className="cursor-pointer bg-white border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-50 transition-colors flex items-center space-x-2">
+                        <Upload className="w-4 h-4 text-gray-600" />
+                        <span className="text-sm">Subir logo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          disabled={uploadingLogo}
+                          className="hidden"
+                        />
+                      </label>
+                      {logoPreview && (
+                        <button
+                          onClick={handleRemoveLogo}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                    {uploadingLogo && (
+                      <p className="text-sm text-gray-500 mt-2">Subiendo...</p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-2">
+                      Formatos: JPG, PNG. Tamaño recomendado: 200x200px (máx 1MB)
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

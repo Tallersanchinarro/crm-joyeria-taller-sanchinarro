@@ -20,7 +20,8 @@ import {
   Package,
   FileText,
   Shield,
-  Percent
+  Percent,
+  Building
 } from 'lucide-react';
 
 function PresupuestoPublico() {
@@ -33,8 +34,42 @@ function PresupuestoPublico() {
   const [actionTaken, setActionTaken] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [empresaConfig, setEmpresaConfig] = useState({
+    nombre: 'LAM-RELOJEROS S.L',
+    logo_url: null,
+    telefono: '672373275',
+    email: 'tallersanchinarro@rubiorelojeros.com',
+    direccion: 'C/ Margarita de parma 1',
+    ciudad: '28050 Madrid'
+  });
 
   const IVA_PORCENTAJE = 21;
+
+  // Cargar configuración de la empresa
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const { data: config, error } = await supabase
+          .from('configuracion')
+          .select('*')
+          .single();
+
+        if (!error && config) {
+          setEmpresaConfig({
+            nombre: config.empresa?.nombre || empresaConfig.nombre,
+            logo_url: config.logo_url || null,
+            telefono: config.empresa?.telefono || empresaConfig.telefono,
+            email: config.empresa?.email || empresaConfig.email,
+            direccion: config.empresa?.direccion || empresaConfig.direccion,
+            ciudad: config.empresa?.ciudad || empresaConfig.ciudad
+          });
+        }
+      } catch (error) {
+        console.log('Usando configuración por defecto');
+      }
+    };
+    loadConfig();
+  }, []);
 
   useEffect(() => {
     loadBudgetData();
@@ -159,21 +194,16 @@ function PresupuestoPublico() {
     const totalConIVA = order.budget || 0;
     const descuento = order.budget_discount || 0;
     
-    // El totalConIVA ya incluye el descuento aplicado
     const baseImponible = totalConIVA / (1 + IVA_PORCENTAJE / 100);
     const iva = totalConIVA - baseImponible;
-    
-    // Calcular subtotal antes de descuento (si hay descuento)
     const subtotalConIVA = totalConIVA + descuento;
-    const subtotalBaseImponible = subtotalConIVA / (1 + IVA_PORCENTAJE / 100);
     
     return {
       totalConIVA,
       descuento,
       baseImponible,
       iva,
-      subtotalConIVA,
-      subtotalBaseImponible
+      subtotalConIVA
     };
   };
 
@@ -217,37 +247,51 @@ function PresupuestoPublico() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
       <div className="max-w-4xl mx-auto">
+        {/* Header con estilo profesional y logo dinámico */}
         {/* Header con estilo profesional */}
-        <div className="bg-white rounded-t-2xl shadow-xl p-8 border-b border-gray-200">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <Gem className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-800">Presupuesto</h1>
-                <p className="text-sm text-gray-500 flex items-center mt-1">
-                  <FileText className="w-4 h-4 mr-1" />
-                  Referencia: {order?.order_number || 'N/A'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3 bg-gray-50 px-4 py-2 rounded-xl">
-              <Clock className="w-5 h-5 text-gray-500" />
-              <div>
-                <p className="text-xs text-gray-500">Válido hasta</p>
-                <p className="font-medium text-gray-800">
-                  {new Date(tokenInfo?.expires_at).toLocaleDateString('es-ES', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                  })}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+<div className="bg-white rounded-t-2xl shadow-xl p-8 border-b border-gray-200">
+  {/* Logo centrado arriba */}
+  <div className="flex justify-center mb-6">
+    {empresaConfig.logo_url ? (
+      <img 
+        src={empresaConfig.logo_url} 
+        alt="Logo" 
+        className="h-14 w-auto object-contain"
+        onError={(e) => { e.target.style.display = 'none'; }}
+      />
+    ) : (
+      <div className="w-14 h-14 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl flex items-center justify-center shadow-lg">
+        <Gem className="w-8 h-8 text-white" />
+      </div>
+    )}
+  </div>
+  
+  {/* Fila con título a izquierda y validez a derecha */}
+  <div className="flex items-center justify-between">
+    <div>
+      <h1 className="text-3xl font-bold text-gray-800">Presupuesto</h1>
+      <p className="text-sm text-gray-500 flex items-center mt-1">
+        <FileText className="w-4 h-4 mr-1" />
+        Referencia: {order?.order_number || 'N/A'}
+      </p>
+    </div>
+    <div className="flex items-center space-x-3 bg-gray-50 px-4 py-2 rounded-xl">
+      <Clock className="w-5 h-5 text-gray-500" />
+      <div>
+        <p className="text-xs text-gray-500">Válido hasta</p>
+        <p className="font-medium text-gray-800">
+          {new Date(tokenInfo?.expires_at).toLocaleDateString('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+          })}
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
 
+        {/* Resto del contenido igual... */}
         {actionTaken ? (
           <div className="bg-white rounded-b-2xl shadow-xl p-12 text-center">
             <div className={`w-24 h-24 ${actionMessage.includes('aceptado') ? 'bg-green-100' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-6`}>
@@ -270,6 +314,7 @@ function PresupuestoPublico() {
           </div>
         ) : (
           <div className="bg-white rounded-b-2xl shadow-xl p-8 space-y-6">
+            {/* Resto del contenido sin cambios... */}
             
             {/* Información del cliente */}
             {client && (
@@ -412,7 +457,6 @@ function PresupuestoPublico() {
             {totales && (
               <div className="bg-gradient-to-br from-primary-50 to-primary-100/50 rounded-xl p-6 border-2 border-primary-200">
                 <div className="space-y-3">
-                  {/* Subtotal (antes de descuento) */}
                   {totales.descuento > 0 && (
                     <>
                       <div className="flex justify-between items-center text-sm">
@@ -426,13 +470,11 @@ function PresupuestoPublico() {
                     </>
                   )}
                   
-                  {/* Base imponible */}
                   <div className="flex justify-between items-center pt-2 border-t border-primary-200">
                     <span className="text-gray-600">Base imponible</span>
                     <span className="font-medium">{totales.baseImponible.toFixed(2)}€</span>
                   </div>
                   
-                  {/* IVA */}
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600 flex items-center">
                       <Percent className="w-3 h-3 mr-1" />
@@ -441,7 +483,6 @@ function PresupuestoPublico() {
                     <span>{totales.iva.toFixed(2)}€</span>
                   </div>
                   
-                  {/* Total */}
                   <div className="flex justify-between items-center pt-3 border-t-2 border-primary-300 mt-2">
                     <span className="font-bold text-primary-800 text-lg">TOTAL (IVA incluido)</span>
                     <span className="text-2xl font-bold text-primary-600">{totales.totalConIVA.toFixed(2)}€</span>

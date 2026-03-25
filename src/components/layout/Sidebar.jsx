@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -26,6 +26,26 @@ function Sidebar() {
   const { orders } = useApp();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [logoUrl, setLogoUrl] = useState(null);
+
+  // Cargar configuración de la empresa
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const { data: config, error } = await supabase
+          .from('configuracion')
+          .select('*')
+          .single();
+
+        if (!error && config && config.logo_url) {
+          setLogoUrl(config.logo_url);
+        }
+      } catch (error) {
+        console.log('Usando logo por defecto');
+      }
+    };
+    loadConfig();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -45,7 +65,7 @@ function Sidebar() {
   // Menú principal
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: PlusCircle, label: 'Nueva Recepción', path: '/nueva-recepcion' },
+    //{ icon: PlusCircle, label: 'Nueva Recepción', path: '/nueva-recepcion' },
     { icon: Package, label: 'Activas', path: '/reparaciones-activas', badge: activeOrders > 0 ? activeOrders : null },
     { icon: Clock, label: 'Listas', path: '/reparaciones-activas?estado=listo', badge: readyOrders > 0 ? readyOrders : null },
     { icon: History, label: 'Historial', path: '/historial' },
@@ -53,7 +73,7 @@ function Sidebar() {
     { icon: Receipt, label: 'Facturación', path: '/facturacion' }
   ];
 
-  // Administración - Incluye familias de trabajos y fallos
+  // Administración
   const adminItems = [
     { icon: FolderTree, label: 'Familias Trabajos', path: '/admin-familias' },
     { icon: ListTodo, label: 'Trabajos', path: '/admin-trabajos' },
@@ -94,14 +114,24 @@ function Sidebar() {
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
       >
-        {/* Logo */}
-        <div className="flex items-center justify-center h-16 border-b border-gray-100">
-          <div className={`flex items-center ${isExpanded ? 'space-x-2' : ''}`}>
+        {/* Logo - Cuando está expandido muestra imagen grande, cuando colapsado muestra gema */}
+        <div className="flex items-center justify-center py-6 border-b border-gray-100">
+          {isExpanded ? (
+            // Expandido: muestra el logo grande ocupando todo el ancho
+            logoUrl ? (
+              <img 
+                src={logoUrl} 
+                alt="Logo" 
+                className="w-full max-w-[160px] h-auto object-contain px-4"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <Gem className="w-12 h-12 text-primary-600" />
+            )
+          ) : (
+            // Colapsado: muestra solo la gema
             <Gem className="w-8 h-8 text-primary-600" />
-            {isExpanded && (
-              <span className="font-bold text-gray-800 text-lg">LAM</span>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Navegación */}
@@ -214,8 +244,8 @@ function Sidebar() {
                   <span className="text-sm font-medium text-gray-600">L</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-gray-700 truncate">LAM RELOJEROS</p>
-                  <p className="text-xs text-gray-400 truncate">taller@lam.com</p>
+                  <p className="text-xs font-medium text-gray-700 truncate">TALLER JOYERIA</p>
+                  <p className="text-xs text-gray-400 truncate"></p>
                 </div>
               </div>
               <button

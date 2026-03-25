@@ -1,8 +1,7 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { supabase } from '../lib/supabaseClient';
 
-// Datos de la empresa
-const EMPRESA = {
+// Datos de la empresa (por defecto)
+let EMPRESA = {
   nombre: 'LAM-RELOJEROS S.L',
   cif: 'B-88615489',
   telefono: '672373275',
@@ -11,177 +10,53 @@ const EMPRESA = {
   ciudad: '28001 Madrid'
 };
 
-const IVA_PORCENTAJE = 21;
+let LOGO_URL = '/logo-taller.png';
+let IVA_PORCENTAJE = 21;
 
 /**
- * Genera un PDF profesional del presupuesto
- * @param {Object} order - Datos de la orden
- * @param {Object} client - Datos del cliente
- * @param {number} descuento - Descuento aplicado
- * @param {string} descuentoTipo - 'porcentaje' o 'euros'
- * @param {string} notas - Notas adicionales
+ * Carga la configuración de la empresa desde Supabase
+ */
+async function cargarConfiguracion() {
+  try {
+    const { data: config, error } = await supabase
+      .from('configuracion')
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    if (config) {
+      if (config.empresa) {
+        EMPRESA = { ...EMPRESA, ...config.empresa };
+      }
+      if (config.impuestos?.iva) {
+        IVA_PORCENTAJE = config.impuestos.iva;
+      }
+      if (config.logo_url) {
+        LOGO_URL = config.logo_url;
+      }
+    }
+  } catch (error) {
+    console.log('Usando configuración por defecto');
+  }
+}
+
+/**
+ * Genera un PDF profesional del presupuesto (HTML + print)
  */
 export const generateBudgetPDF = async (order, client, descuento = 0, descuentoTipo = 'porcentaje', notas = '') => {
-  // Crear documento en formato A4
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4'
-  });
+  await cargarConfiguracion();
 
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 20;
-  let yPos = margin;
-
-  // Función auxiliar para dibujar línea
-  const drawLine = (y, lineWidth = 0.5) => {
-    doc.setDrawColor(200, 200, 200);
-    doc.line(margin, y, pageWidth - margin, y);
+  const formatDate = (dateString) => {
+    if (!dateString) return new Date().toLocaleDateString();
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
   };
 
-  // ========== HEADER ==========
-  // Título
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(24);
-  doc.setTextColor(33, 33, 33);
-  doc.text('PRESUPUESTO', margin, yPos);
-  
-  doc.setFontSize(10);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Nº ${order.order_number || order.id.slice(-8)}`, margin, yPos + 7);
-  
-  // Fecha de emisión
-  const fechaEmision = new Date().toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  });
-  
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Fecha: ${fechaEmision}`, pageWidth - margin - 40, yPos);
-  doc.text(`Válido hasta: ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('es-ES')}`, pageWidth - margin - 40, yPos + 7);
-  
-  yPos += 20;
-  drawLine(yPos);
-  yPos += 8;
-
-  // ========== DATOS DE LA EMPRESA ==========
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(33, 33, 33);
-  doc.text('TALLER', margin, yPos);
-  
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(80, 80, 80);
-  doc.text(EMPRESA.nombre, margin, yPos + 5);
-  doc.text(EMPRESA.direccion, margin, yPos + 10);
-  doc.text(EMPRESA.ciudad, margin, yPos + 15);
-  doc.text(`Tel: ${EMPRESA.telefono}`, margin, yPos + 20);
-  doc.text(`CIF: ${EMPRESA.cif}`, margin, yPos + 25);
-  
-  // ========== DATOS DEL CLIENTE ==========
-  const clientX = pageWidth / 2 + 10;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(33, 33, 33);
-  doc.text('CLIENTE', clientX, yPos);
-  
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(80, 80, 80);
-  doc.text(client.name, clientX, yPos + 5);
-  doc.text(`Tel: ${client.phone}`, clientX, yPos + 10);
-  if (client.email) doc.text(`Email: ${client.email}`, clientX, yPos + 15);
-  if (client.address) doc.text(client.address, clientX, yPos + 20);
-  
-  yPos += 40;
-  drawLine(yPos);
-  yPos += 8;
-
-  // ========== DESCRIPCIÓN DE LA JOYA ==========
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(33, 33, 33);
-  doc.text('JOYA A REPARAR', margin, yPos);
-  
-  yPos += 6;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(80, 80, 80);
-  doc.text(`Tipo: ${order.item_type || 'No especificado'}`, margin, yPos);
-  doc.text(`Material: ${order.material || 'No especificado'}`, margin + 70, yPos);
-  
-  yPos += 5;
-  doc.text(`Descripción: ${order.description || 'Sin descripción'}`, margin, yPos);
-  
-  if (order.observations) {
-    yPos += 5;
-    doc.text(`Observaciones: ${order.observations}`, margin, yPos);
-  }
-  
-  yPos += 10;
-  drawLine(yPos);
-  yPos += 8;
-
-  // ========== TRABAJOS A REALIZAR ==========
-  if (order.trabajos && order.trabajos.length > 0) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(33, 33, 33);
-    doc.text('TRABAJOS A REALIZAR', margin, yPos);
-    yPos += 6;
-    
-    const trabajosTable = order.trabajos.map(t => [
-      t.nombre,
-      (t.cantidad || 1).toString(),
-      `${(t.tarifa_aplicada || t.tarifa_base || 0).toFixed(2)} €`,
-      t.descuento ? `${t.descuento}%` : '-',
-      `${(t.total || 0).toFixed(2)} €`
-    ]);
-    
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Trabajo', 'Cant.', 'Precio', 'Dto.', 'Importe']],
-      body: trabajosTable,
-      margin: { left: margin, right: margin },
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [240, 240, 240], textColor: [33, 33, 33], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [250, 250, 250] }
-    });
-    
-    yPos = doc.lastAutoTable.finalY + 8;
-  }
-
-  // ========== FALLOS DETECTADOS ==========
-  if (order.fallos && order.fallos.length > 0) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(33, 33, 33);
-    doc.text('FALLOS DETECTADOS', margin, yPos);
-    yPos += 6;
-    
-    const fallosTable = order.fallos.map(f => [
-      f.nombre,
-      f.gravedad ? f.gravedad.charAt(0).toUpperCase() + f.gravedad.slice(1) : 'Media',
-      f.observaciones || '-'
-    ]);
-    
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Fallo', 'Gravedad', 'Observaciones']],
-      body: fallosTable,
-      margin: { left: margin, right: margin },
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [240, 240, 240], textColor: [33, 33, 33], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [250, 250, 250] }
-    });
-    
-    yPos = doc.lastAutoTable.finalY + 8;
-  }
-
-  // ========== CÁLCULO DE TOTALES ==========
-  // Calcular totales con IVA
+  // Calcular totales
   const trabajosTotal = (order.trabajos || []).reduce((sum, t) => sum + (t.total || t.tarifa_aplicada * (t.cantidad || 1) || 0), 0);
   const fallosTotal = (order.fallos || []).reduce((sum, f) => sum + (f.total || 0), 0);
   const subtotalConIVA = trabajosTotal + fallosTotal;
@@ -198,86 +73,274 @@ export const generateBudgetPDF = async (order, client, descuento = 0, descuentoT
   const totalConIVA = subtotalConIVA - descuentoAplicado;
   const baseImponible = totalConIVA / (1 + IVA_PORCENTAJE / 100);
   const iva = totalConIVA - baseImponible;
-  
-  // Posición para los totales
-  const totalsX = pageWidth - margin - 55;
-  let totalsY = yPos + 5;
-  
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(80, 80, 80);
-  
-  doc.text('Subtotal:', totalsX, totalsY);
-  doc.text(`${subtotalConIVA.toFixed(2)} €`, pageWidth - margin, totalsY);
-  
-  if (descuentoAplicado > 0) {
-    totalsY += 5;
-    doc.text('Descuento:', totalsX, totalsY);
-    doc.text(`- ${descuentoAplicado.toFixed(2)} €`, pageWidth - margin, totalsY);
-  }
-  
-  totalsY += 8;
-  drawLine(totalsY - 2);
-  
-  totalsY += 2;
-  doc.text('Base imponible:', totalsX, totalsY);
-  doc.text(`${baseImponible.toFixed(2)} €`, pageWidth - margin, totalsY);
-  
-  totalsY += 5;
-  doc.text(`IVA (${IVA_PORCENTAJE}%):`, totalsX, totalsY);
-  doc.text(`${iva.toFixed(2)} €`, pageWidth - margin, totalsY);
-  
-  totalsY += 10;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(33, 33, 33);
-  doc.text('TOTAL:', totalsX, totalsY);
-  doc.text(`${totalConIVA.toFixed(2)} €`, pageWidth - margin, totalsY);
-  
-  // Añadir recuadro para el total
-  doc.setDrawColor(100, 100, 100);
-  doc.rect(pageWidth - margin - 55, totalsY - 5, 55, 12);
-  
-  yPos = totalsY + 15;
 
-  // ========== NOTAS ==========
-  if (notas || order.budget_notes) {
-    const notasTexto = notas || order.budget_notes;
-    yPos += 5;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(33, 33, 33);
-    doc.text('NOTAS:', margin, yPos);
-    
-    yPos += 4;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    
-    const splitNotes = doc.splitTextToSize(notasTexto, pageWidth - margin * 2);
-    doc.text(splitNotes, margin, yPos);
-    yPos += splitNotes.length * 4 + 5;
-  }
+  const fechaEmision = formatDate(new Date());
+  const fechaValidez = formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
 
-  // ========== PIE DE PÁGINA ==========
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const footerY = pageHeight - 20;
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Presupuesto - ${order.order_number}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Helvetica', Arial, sans-serif;
+          background: white;
+          padding: 20px;
+          color: #333;
+        }
+        .container {
+          max-width: 1000px;
+          margin: 0 auto;
+        }
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 30px;
+          padding-bottom: 20px;
+          border-bottom: 2px solid #e0b35a;
+        }
+        .logo-area img {
+          max-height: 80px;
+          max-width: 200px;
+        }
+        .title-area {
+          text-align: right;
+        }
+        .title-area h1 {
+          font-size: 32px;
+          color: #e0b35a;
+          margin-bottom: 10px;
+        }
+        .doc-number {
+          font-size: 12px;
+          color: #666;
+        }
+        .data-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 30px;
+          margin-bottom: 30px;
+        }
+        .data-box {
+          border: 1px solid #eee;
+          padding: 15px;
+          border-radius: 8px;
+          background: #fafafa;
+        }
+        .data-box h3 {
+          font-size: 14px;
+          color: #e0b35a;
+          margin-bottom: 12px;
+          border-bottom: 1px solid #eee;
+          padding-bottom: 5px;
+        }
+        .data-row {
+          font-size: 12px;
+          margin: 8px 0;
+        }
+        .data-label {
+          font-weight: bold;
+          color: #555;
+          display: inline-block;
+          width: 80px;
+        }
+        .concepto {
+          margin-bottom: 25px;
+        }
+        .concepto h3 {
+          font-size: 14px;
+          color: #e0b35a;
+          margin-bottom: 8px;
+        }
+        .concepto-text {
+          background: #f5f5f5;
+          padding: 12px;
+          border-radius: 5px;
+          font-size: 13px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 20px 0;
+        }
+        th {
+          background: #f0f0f0;
+          padding: 10px;
+          text-align: left;
+          font-size: 12px;
+          font-weight: bold;
+          border-bottom: 2px solid #ddd;
+        }
+        td {
+          padding: 8px 10px;
+          font-size: 11px;
+          border-bottom: 1px solid #eee;
+        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .totales {
+          margin-top: 20px;
+          text-align: right;
+        }
+        .totales-box {
+          display: inline-block;
+          background: #fafafa;
+          padding: 15px 25px;
+          border-radius: 8px;
+          border: 1px solid #e0b35a;
+          min-width: 250px;
+        }
+        .total-row {
+          display: flex;
+          justify-content: space-between;
+          margin: 8px 0;
+          font-size: 12px;
+        }
+        .total-row strong {
+          font-size: 16px;
+          color: #e0b35a;
+        }
+        .separator {
+          border-top: 1px solid #ddd;
+          margin: 10px 0;
+        }
+        .notas {
+          margin: 30px 0;
+          background: #fff8e8;
+          padding: 12px;
+          border-radius: 5px;
+          font-size: 11px;
+          border-left: 3px solid #e0b35a;
+        }
+        .footer {
+          margin-top: 40px;
+          padding-top: 20px;
+          border-top: 1px solid #eee;
+          text-align: center;
+          font-size: 9px;
+          color: #999;
+        }
+        @media print {
+          body { padding: 0; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div class="logo-area">
+            <img src="${LOGO_URL}" alt="Logo" onerror="this.style.display='none'">
+          </div>
+          <div class="title-area">
+            <h1>PRESUPUESTO</h1>
+            <div class="doc-number">Nº ${order.order_number || order.id.slice(-8)}</div>
+            <div class="doc-number">Fecha: ${fechaEmision}</div>
+            <div class="doc-number">Válido hasta: ${fechaValidez}</div>
+          </div>
+        </div>
+
+        <div class="data-grid">
+          <div class="data-box">
+            <h3>TALLER</h3>
+            <div class="data-row"><span class="data-label">Nombre:</span> ${EMPRESA.nombre}</div>
+            <div class="data-row"><span class="data-label">Dirección:</span> ${EMPRESA.direccion}</div>
+            <div class="data-row"><span class="data-label">Ciudad:</span> ${EMPRESA.ciudad}</div>
+            <div class="data-row"><span class="data-label">CIF:</span> ${EMPRESA.cif}</div>
+            <div class="data-row"><span class="data-label">Teléfono:</span> ${EMPRESA.telefono}</div>
+            <div class="data-row"><span class="data-label">Email:</span> ${EMPRESA.email}</div>
+          </div>
+          <div class="data-box">
+            <h3>CLIENTE</h3>
+            <div class="data-row"><span class="data-label">Nombre:</span> ${client.name}</div>
+            <div class="data-row"><span class="data-label">Teléfono:</span> ${client.phone}</div>
+            ${client.email ? `<div class="data-row"><span class="data-label">Email:</span> ${client.email}</div>` : ''}
+            ${client.address ? `<div class="data-row"><span class="data-label">Dirección:</span> ${client.address}</div>` : ''}
+            ${client.nif ? `<div class="data-row"><span class="data-label">NIF:</span> ${client.nif}</div>` : ''}
+          </div>
+        </div>
+
+        <div class="concepto">
+          <h3>JOYA A REPARAR</h3>
+          <div class="concepto-text">
+            <strong>Tipo:</strong> ${order.item_type || 'No especificado'}<br>
+            <strong>Material:</strong> ${order.material || 'No especificado'}<br>
+            <strong>Descripción:</strong> ${order.description || 'Sin descripción'}<br>
+            ${order.observations ? `<strong>Observaciones:</strong> ${order.observations}` : ''}
+          </div>
+        </div>
+
+        ${order.trabajos?.length > 0 ? `
+          <h3>TRABAJOS A REALIZAR</h3>
+          <table>
+            <thead>
+              <tr><th>Trabajo</th><th class="text-center">Cant.</th><th class="text-right">Precio</th><th class="text-center">Dto.</th><th class="text-right">Importe</th></tr>
+            </thead>
+            <tbody>
+              ${order.trabajos.map(t => `
+                <tr>
+                  <td>${t.nombre}</td>
+                  <td class="text-center">${t.cantidad || 1}</td>
+                  <td class="text-right">${(t.tarifa_aplicada || t.tarifa_base || 0).toFixed(2)} €</td>
+                  <td class="text-center">${t.descuento ? `${t.descuento}%` : '—'}</td>
+                  <td class="text-right">${(t.total || 0).toFixed(2)} €</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : ''}
+
+        ${order.fallos?.length > 0 ? `
+          <h3>FALLOS DETECTADOS</h3>
+          <table>
+            <thead><tr><th>Fallo</th><th>Gravedad</th><th>Observaciones</th></tr></thead>
+            <tbody>
+              ${order.fallos.map(f => `
+                <tr>
+                  <td>${f.nombre}</td>
+                  <td>${f.gravedad?.charAt(0).toUpperCase() + f.gravedad?.slice(1) || 'Media'}</td>
+                  <td>${f.observaciones || '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : ''}
+
+        <div class="totales">
+          <div class="totales-box">
+            <div class="total-row"><span>Subtotal:</span><span>${subtotalConIVA.toFixed(2)} €</span></div>
+            ${descuentoAplicado > 0 ? `<div class="total-row"><span>Descuento:</span><span>- ${descuentoAplicado.toFixed(2)} €</span></div>` : ''}
+            <div class="total-row"><span>Base imponible:</span><span>${baseImponible.toFixed(2)} €</span></div>
+            <div class="total-row"><span>IVA (${IVA_PORCENTAJE}%):</span><span>${iva.toFixed(2)} €</span></div>
+            <div class="separator"></div>
+            <div class="total-row"><strong>TOTAL:</strong><strong>${totalConIVA.toFixed(2)} €</strong></div>
+          </div>
+        </div>
+
+        ${notas || order.budget_notes ? `
+          <div class="notas">
+            <strong>NOTAS:</strong><br>${notas || order.budget_notes}
+          </div>
+        ` : ''}
+
+        <div class="footer">
+          <p>Este presupuesto tiene una validez de 30 días. Los precios incluyen IVA.</p>
+          <p>${EMPRESA.nombre} · ${EMPRESA.telefono} · ${EMPRESA.email}</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(htmlContent);
+  printWindow.document.close();
+  printWindow.focus();
   
-  doc.setFontSize(7);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Este presupuesto tiene una validez de 30 días. Los precios incluyen IVA.', margin, footerY);
-  doc.text('Para cualquier consulta, contacte con nosotros.', margin, footerY + 4);
-  doc.text(`LAM-RELOJEROS S.L · ${EMPRESA.telefono} · ${EMPRESA.email}`, margin, footerY + 8);
-  
-  // Número de página
-  const pageNumber = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pageNumber; i++) {
-    doc.setPage(i);
-    doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Página ${i} de ${pageNumber}`, pageWidth - margin - 20, pageHeight - 10);
-  }
-  
-  // Guardar PDF
-  doc.save(`presupuesto_${order.order_number || order.id.slice(-8)}.pdf`);
+  setTimeout(() => {
+    printWindow.print();
+  }, 500);
 };
