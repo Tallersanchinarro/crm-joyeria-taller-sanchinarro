@@ -18,16 +18,35 @@ import {
   CreditCard,
   Upload,
   Image,
-  Trash2
+  Trash2,
+  Download,
+  FileSpreadsheet,
+  FileJson,
+  Receipt,
+  Lock,
+  KeyRound,
+  UploadCloud,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { useNotification } from '../context/NotificationContext';
 
 function Configuracion() {
+  const { showNotification } = useNotification();
   const [activeTab, setActiveTab] = useState('empresa');
   const [loading, setLoading] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [logoPreview, setLogoPreview] = useState(null);
+  const [logoFile, setLogoFile] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [configPassword, setConfigPassword] = useState('');
+  
   const [config, setConfig] = useState({
     empresa: {
       nombre: 'LAM-RELOJEROS S.L',
@@ -36,7 +55,9 @@ function Configuracion() {
       email: 'info@lam-relojeros.com',
       direccion: 'C/ Ejemplo, 123',
       ciudad: '28001 Madrid',
-      web: 'www.lam-relojeros.com'
+      cp: '28001',
+      web: 'www.lam-relojeros.com',
+      cuentaBancaria: 'ES00 0000 0000 0000 0000 0000'
     },
     impuestos: {
       iva: 21,
@@ -46,123 +67,435 @@ function Configuracion() {
       email_presupuesto: true,
       email_factura: true,
       email_recordatorio: false
-    }
+    },
+    config_password: ''
   });
 
-  // Cargar configuración guardada
+  // Cargar la contraseña desde Supabase para validar después
   useEffect(() => {
-    const loadConfig = async () => {
+    const loadPassword = async () => {
       try {
         const { data, error } = await supabase
           .from('configuracion')
-          .select('*')
+          .select('config_password')
           .single();
-
-        if (!error && data) {
-          setConfig(data);
-          if (data.logo_url) {
-            setLogoPreview(data.logo_url);
-          }
+        
+        if (!error && data?.config_password) {
+          setConfigPassword(data.config_password);
         }
       } catch (error) {
-        console.log('Usando configuración por defecto');
+        console.error('Error cargando contraseña:', error);
       }
     };
-    loadConfig();
+    loadPassword();
   }, []);
 
-  const handleSave = async () => {
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (password === configPassword) {
+      setIsAuthenticated(true);
+      setPasswordError('');
+      setPassword('');
+      loadConfig();
+    } else {
+      setPasswordError('Contraseña incorrecta');
+    }
+  };
+
+  const loadConfig = async () => {
     setLoading(true);
-    setSaved(false);
-
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('configuracion')
-        .upsert({ id: 1, ...config, logo_url: logoPreview });
+        .select('*')
+        .single();
 
-      if (error) throw error;
-
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      if (!error && data) {
+        setConfig(data);
+        setConfigPassword(data.config_password || '');
+      }
+      
+      const { data: logoData } = await supabase
+        .from('configuracion')
+        .select('logo_url')
+        .single();
+      
+      if (logoData?.logo_url) {
+        setLogoPreview(logoData.logo_url);
+      }
+      
     } catch (error) {
-      console.error('Error guardando configuración:', error);
-      alert('Error al guardar la configuración');
+      console.log('Usando configuración por defecto');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogoUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    // Validar tipo de archivo
-    if (!file.type.startsWith('image/')) {
-      alert('Solo se permiten imágenes');
-      return;
-    }
-
-    // Validar tamaño (máx 1MB)
-    if (file.size > 1024 * 1024) {
-      alert('La imagen no debe superar 1MB');
-      return;
-    }
-
-    setUploadingLogo(true);
-
+  const handleSave = async () => {
+    setSaving(true);
     try {
-      // Generar nombre único para el archivo
-      const fileExt = file.name.split('.').pop();
-      const fileName = `logo_${Date.now()}.${fileExt}`;
+      let logoUrl = logoPreview;
+      
+      if (logoFile) {
+        const fileExt = logoFile.name.split('.').pop();
+        const fileName = `logo_${Date.now()}.${fileExt}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('logos')
+          .upload(fileName, logoFile);
 
-      // Subir a Storage
-      const { data, error } = await supabase.storage
-        .from('logos')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: true
-        });
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('logos')
+            .getPublicUrl(fileName);
+          logoUrl = urlData.publicUrl;
+        }
+      }
+
+      const configToSave = {
+        ...config,
+        logo_url: logoUrl,
+        config_password: configPassword,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('configuracion')
+        .upsert({ id: 1, ...configToSave });
 
       if (error) throw error;
 
-      // Obtener URL pública
-      const { data: urlData } = supabase.storage
-        .from('logos')
-        .getPublicUrl(fileName);
-
-      // Actualizar preview
-      setLogoPreview(urlData.publicUrl);
-
-      // Mostrar mensaje de éxito
-      alert('Logo subido correctamente. Guarda los cambios para aplicarlo.');
-
+      showNotification('Configuración guardada correctamente', 'success');
+      
     } catch (error) {
-      console.error('Error subiendo logo:', error);
-      alert('Error al subir el logo: ' + error.message);
+      console.error('Error guardando:', error);
+      showNotification('Error al guardar la configuración', 'error');
     } finally {
-      setUploadingLogo(false);
+      setSaving(false);
     }
   };
 
-  const handleRemoveLogo = async () => {
-    if (!logoPreview) return;
-
-    if (window.confirm('¿Eliminar el logo actual?')) {
-      setLogoPreview(null);
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoFile(null);
+    setLogoPreview(null);
+  };
+
+  // ========== FUNCIONES DE EXPORTACIÓN ==========
+  
+  const exportToCSV = (data, filename, headers) => {
+    const csvRows = [];
+    csvRows.push(headers.map(h => `"${h}"`).join(','));
+    
+    data.forEach(row => {
+      const values = headers.map(header => {
+        const value = row[header.toLowerCase()] || '';
+        return `"${String(value).replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    });
+    
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportToJSON = (data, filename) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportClientes = async (format = 'csv') => {
+    setExporting(true);
+    try {
+      const { data: clientes, error } = await supabase
+        .from('clientes')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (format === 'csv') {
+        exportToCSV(clientes, `clientes_${new Date().toISOString().slice(0, 10)}.csv`, ['ID', 'Nombre', 'NIF', 'Teléfono', 'Email', 'Dirección', 'Notas', 'Fecha']);
+      } else {
+        exportToJSON(clientes, `clientes_${new Date().toISOString().slice(0, 10)}.json`);
+      }
+      
+      showNotification(`Exportados ${clientes.length} clientes`, 'success');
+    } catch (error) {
+      console.error('Error exportando clientes:', error);
+      showNotification('Error al exportar clientes', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportOrdenes = async (format = 'csv') => {
+    setExporting(true);
+    try {
+      const { data: ordenes, error } = await supabase
+        .from('ordenes')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (format === 'csv') {
+        exportToCSV(ordenes, `ordenes_${new Date().toISOString().slice(0, 10)}.csv`, ['ID', 'Nº Orden', 'Cliente', 'Tipo', 'Material', 'Estado', 'Presupuesto', 'Fecha']);
+      } else {
+        exportToJSON(ordenes, `ordenes_${new Date().toISOString().slice(0, 10)}.json`);
+      }
+      
+      showNotification(`Exportadas ${ordenes.length} órdenes`, 'success');
+    } catch (error) {
+      console.error('Error exportando órdenes:', error);
+      showNotification('Error al exportar órdenes', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportFacturas = async (format = 'csv') => {
+    setExporting(true);
+    try {
+      const { data: facturas, error } = await supabase
+        .from('facturas')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        if (format === 'csv') {
+          exportToCSV([], `facturas_${new Date().toISOString().slice(0, 10)}.csv`, ['ID', 'Nº Factura', 'Cliente', 'Total', 'Fecha']);
+        } else {
+          exportToJSON([], `facturas_${new Date().toISOString().slice(0, 10)}.json`);
+        }
+        showNotification('No hay facturas para exportar', 'info');
+        return;
+      }
+      
+      if (format === 'csv') {
+        exportToCSV(facturas, `facturas_${new Date().toISOString().slice(0, 10)}.csv`, ['ID', 'Nº Factura', 'Cliente', 'Total', 'Fecha']);
+      } else {
+        exportToJSON(facturas, `facturas_${new Date().toISOString().slice(0, 10)}.json`);
+      }
+      
+      showNotification(`Exportadas ${facturas.length} facturas`, 'success');
+    } catch (error) {
+      console.error('Error exportando facturas:', error);
+      showNotification('Error al exportar facturas', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportTodo = async () => {
+    setExporting(true);
+    try {
+      const [clientes, ordenes, facturas] = await Promise.all([
+        supabase.from('clientes').select('*'),
+        supabase.from('ordenes').select('*'),
+        supabase.from('facturas').select('*')
+      ]);
+      
+      const exportData = {
+        fecha_exportacion: new Date().toISOString(),
+        version: '1.0',
+        clientes: clientes.data || [],
+        ordenes: ordenes.data || [],
+        facturas: facturas.data || [],
+        configuracion: config
+      };
+      
+      exportToJSON(exportData, `backup_completo_${new Date().toISOString().slice(0, 10)}.json`);
+      showNotification('Backup completo exportado correctamente', 'success');
+    } catch (error) {
+      console.error('Error exportando todo:', error);
+      showNotification('Error al exportar backup completo', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // ========== FUNCIÓN DE RESTAURACIÓN ==========
+  
+  const restaurarBackup = async (file) => {
+    if (!window.confirm('⚠️ Esta acción sobrescribirá los datos actuales. ¿Estás seguro de continuar?')) {
+      return;
+    }
+    
+    setRestoring(true);
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const backup = JSON.parse(e.target.result);
+        
+        if (!backup.clientes || !backup.ordenes) {
+          throw new Error('Archivo de backup no válido');
+        }
+        
+        const resumen = `
+          📋 Resumen del backup:
+          - Clientes: ${backup.clientes.length}
+          - Órdenes: ${backup.ordenes.length}
+          - Facturas: ${backup.facturas?.length || 0}
+          
+          ¿Confirmas la restauración?
+        `;
+        
+        if (!window.confirm(resumen)) {
+          setRestoring(false);
+          return;
+        }
+        
+        if (backup.configuracion) {
+          await supabase.from('configuracion').upsert({ id: 1, ...backup.configuracion });
+        }
+        
+        if (backup.clientes.length > 0) {
+          await supabase.from('clientes').upsert(backup.clientes);
+        }
+        
+        if (backup.ordenes.length > 0) {
+          await supabase.from('ordenes').upsert(backup.ordenes);
+        }
+        
+        if (backup.facturas && backup.facturas.length > 0) {
+          await supabase.from('facturas').upsert(backup.facturas);
+        }
+        
+        showNotification('✅ Backup restaurado correctamente', 'success');
+        
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+        
+      } catch (error) {
+        console.error('Error restaurando backup:', error);
+        showNotification(`Error al restaurar: ${error.message}`, 'error');
+      } finally {
+        setRestoring(false);
+      }
+    };
+    
+    reader.onerror = () => {
+      showNotification('Error al leer el archivo', 'error');
+      setRestoring(false);
+    };
+    
+    reader.readAsText(file);
+  };
+
+  const handleRestoreClick = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      if (e.target.files && e.target.files[0]) {
+        restaurarBackup(e.target.files[0]);
+      }
+    };
+    input.click();
   };
 
   const tabs = [
     { id: 'empresa', label: 'Empresa', icon: Building },
     { id: 'impuestos', label: 'Impuestos', icon: Percent },
-    { id: 'usuarios', label: 'Usuarios', icon: Users },
-    { id: 'seguridad', label: 'Seguridad', icon: Shield },
+    { id: 'notificaciones', label: 'Notificaciones', icon: Mail },
     { id: 'datos', label: 'Datos', icon: Database }
   ];
 
+  // Pantalla de autenticación
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-2xl mb-4">
+              <Lock className="w-8 h-8 text-primary-600" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-800">Acceso restringido</h1>
+            <p className="text-gray-500 mt-2">Introduce la contraseña para acceder a la configuración</p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Contraseña
+                </label>
+                <div className="relative">
+                  <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="••••••••"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {passwordError && (
+                  <p className="text-red-500 text-sm mt-2">{passwordError}</p>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="w-full py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors"
+              >
+                Acceder
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header con botón para cerrar sesión */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center">
@@ -173,27 +506,32 @@ function Configuracion() {
             Gestiona los ajustes de tu taller de joyería
           </p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={loading}
-          className="btn-primary flex items-center space-x-2"
-        >
-          {loading ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
-          <span>Guardar cambios</span>
-        </button>
-      </div>
-
-      {/* Mensaje de éxito */}
-      {saved && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center space-x-2">
-          <CheckCircle className="w-5 h-5 text-green-600" />
-          <span className="text-green-700">Configuración guardada correctamente</span>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => {
+              setIsAuthenticated(false);
+              setPassword('');
+              setPasswordError('');
+            }}
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 text-sm"
+          >
+            <Lock className="w-4 h-4" />
+            <span>Cerrar sesión</span>
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="btn-primary flex items-center space-x-2"
+          >
+            {saving ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            <span>Guardar cambios</span>
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Tabs */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -223,13 +561,12 @@ function Configuracion() {
         <div className="p-6">
           {/* Empresa */}
           {activeTab === 'empresa' && (
-            <div className="space-y-6 max-w-2xl">
+            <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-800 flex items-center">
                 <Building className="w-5 h-5 mr-2 text-primary-500" />
                 Datos de la empresa
               </h3>
               
-              {/* Sección del logo */}
               <div className="border border-gray-200 rounded-lg p-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Logo de la empresa
@@ -250,8 +587,7 @@ function Configuracion() {
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={handleLogoUpload}
-                          disabled={uploadingLogo}
+                          onChange={handleLogoChange}
                           className="hidden"
                         />
                       </label>
@@ -264,11 +600,8 @@ function Configuracion() {
                         </button>
                       )}
                     </div>
-                    {uploadingLogo && (
-                      <p className="text-sm text-gray-500 mt-2">Subiendo...</p>
-                    )}
                     <p className="text-xs text-gray-500 mt-2">
-                      Formatos: JPG, PNG. Tamaño recomendado: 200x200px (máx 1MB)
+                      Formatos: JPG, PNG. Tamaño recomendado: 200x200px
                     </p>
                   </div>
                 </div>
@@ -343,6 +676,17 @@ function Configuracion() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Código Postal
+                  </label>
+                  <input
+                    type="text"
+                    value={config.empresa.cp}
+                    onChange={(e) => setConfig({...config, empresa: {...config.empresa, cp: e.target.value}})}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Sitio web
                   </label>
                   <input
@@ -351,6 +695,44 @@ function Configuracion() {
                     onChange={(e) => setConfig({...config, empresa: {...config.empresa, web: e.target.value}})}
                     className="input-field"
                   />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Cuenta bancaria (IBAN)
+                  </label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      value={config.empresa.cuentaBancaria}
+                      onChange={(e) => setConfig({...config, empresa: {...config.empresa, cuentaBancaria: e.target.value}})}
+                      className="input-field pl-10"
+                      placeholder="ES00 0000 0000 0000 0000 0000"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    IBAN para facturas
+                  </p>
+                </div>
+                
+                {/* Campo para cambiar contraseña */}
+                <div className="md:col-span-2 border-t border-gray-200 pt-4 mt-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contraseña de acceso a configuración
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="password"
+                      value={configPassword}
+                      onChange={(e) => setConfigPassword(e.target.value)}
+                      className="input-field pl-10"
+                      placeholder="Nueva contraseña (déjalo en blanco para mantener la actual)"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Contraseña necesaria para acceder a esta página. Cámbiala por una segura.
+                  </p>
                 </div>
               </div>
             </div>
@@ -378,38 +760,74 @@ function Configuracion() {
                   <span className="text-gray-500">%</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Porcentaje de IVA aplicado a los presupuestos
+                  Porcentaje de IVA aplicado a los presupuestos y facturas
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  IRPF (%)
+                </label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="number"
+                    value={config.impuestos.irpf}
+                    onChange={(e) => setConfig({...config, impuestos: {...config.impuestos, irpf: parseFloat(e.target.value) || 0}})}
+                    className="input-field w-32"
+                    step="0.1"
+                  />
+                  <span className="text-gray-500">%</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Porcentaje de retención IRPF (opcional)
                 </p>
               </div>
             </div>
           )}
 
-          {/* Usuarios */}
-          {activeTab === 'usuarios' && (
+          {/* Notificaciones */}
+          {activeTab === 'notificaciones' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-                <Users className="w-5 h-5 mr-2 text-primary-500" />
-                Usuarios del sistema
+                <Mail className="w-5 h-5 mr-2 text-primary-500" />
+                Notificaciones
               </h3>
-              <div className="bg-gray-50 rounded-lg p-6 text-center">
-                <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">Gestión de usuarios próximamente</p>
-                <p className="text-sm text-gray-400">Podrás añadir y gestionar usuarios del taller</p>
-              </div>
-            </div>
-          )}
-
-          {/* Seguridad */}
-          {activeTab === 'seguridad' && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-                <Shield className="w-5 h-5 mr-2 text-primary-500" />
-                Seguridad
-              </h3>
-              <div className="bg-gray-50 rounded-lg p-6 text-center">
-                <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">Configuración de seguridad próximamente</p>
-                <p className="text-sm text-gray-400">Autenticación de dos factores, copias de seguridad, etc.</p>
+              <div className="space-y-3">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.notificaciones.email_presupuesto}
+                    onChange={(e) => setConfig({
+                      ...config,
+                      notificaciones: {...config.notificaciones, email_presupuesto: e.target.checked}
+                    })}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">Enviar email cuando se genere un presupuesto</span>
+                </label>
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.notificaciones.email_factura}
+                    onChange={(e) => setConfig({
+                      ...config,
+                      notificaciones: {...config.notificaciones, email_factura: e.target.checked}
+                    })}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">Enviar email cuando se genere una factura</span>
+                </label>
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.notificaciones.email_recordatorio}
+                    onChange={(e) => setConfig({
+                      ...config,
+                      notificaciones: {...config.notificaciones, email_recordatorio: e.target.checked}
+                    })}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">Enviar recordatorios de recogida</span>
+                </label>
               </div>
             </div>
           )}
@@ -421,17 +839,142 @@ function Configuracion() {
                 <Database className="w-5 h-5 mr-2 text-primary-500" />
                 Gestión de datos
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button className="p-4 bg-white border border-gray-200 rounded-xl text-left hover:border-primary-200 transition-colors">
-                  <Database className="w-8 h-8 text-primary-500 mb-2" />
-                  <h4 className="font-medium">Exportar datos</h4>
-                  <p className="text-xs text-gray-500">Exportar clientes, órdenes y presupuestos</p>
-                </button>
-                <button className="p-4 bg-white border border-gray-200 rounded-xl text-left hover:border-red-200 transition-colors">
-                  <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
-                  <h4 className="font-medium">Borrar datos de prueba</h4>
-                  <p className="text-xs text-gray-500">Eliminar todos los datos de prueba del sistema</p>
-                </button>
+              
+              {/* Exportar datos */}
+              <div>
+                <h4 className="font-medium text-gray-700 mb-3">Exportar datos</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <FileSpreadsheet className="w-8 h-8 text-green-600 mb-2" />
+                    <h5 className="font-medium text-gray-800">Clientes</h5>
+                    <p className="text-xs text-gray-500 mt-1">Exportar lista de clientes</p>
+                    <div className="flex space-x-2 mt-3">
+                      <button
+                        onClick={() => exportClientes('csv')}
+                        disabled={exporting}
+                        className="flex-1 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition-colors disabled:opacity-50"
+                      >
+                        CSV
+                      </button>
+                      <button
+                        onClick={() => exportClientes('json')}
+                        disabled={exporting}
+                        className="flex-1 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition-colors disabled:opacity-50"
+                      >
+                        JSON
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <FileText className="w-8 h-8 text-blue-600 mb-2" />
+                    <h5 className="font-medium text-gray-800">Órdenes</h5>
+                    <p className="text-xs text-gray-500 mt-1">Exportar todas las reparaciones</p>
+                    <div className="flex space-x-2 mt-3">
+                      <button
+                        onClick={() => exportOrdenes('csv')}
+                        disabled={exporting}
+                        className="flex-1 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition-colors disabled:opacity-50"
+                      >
+                        CSV
+                      </button>
+                      <button
+                        onClick={() => exportOrdenes('json')}
+                        disabled={exporting}
+                        className="flex-1 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition-colors disabled:opacity-50"
+                      >
+                        JSON
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <Receipt className="w-8 h-8 text-purple-600 mb-2" />
+                    <h5 className="font-medium text-gray-800">Facturas</h5>
+                    <p className="text-xs text-gray-500 mt-1">Exportar historial de facturas</p>
+                    <div className="flex space-x-2 mt-3">
+                      <button
+                        onClick={() => exportFacturas('csv')}
+                        disabled={exporting}
+                        className="flex-1 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition-colors disabled:opacity-50"
+                      >
+                        CSV
+                      </button>
+                      <button
+                        onClick={() => exportFacturas('json')}
+                        disabled={exporting}
+                        className="flex-1 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition-colors disabled:opacity-50"
+                      >
+                        JSON
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="border border-gray-200 rounded-lg p-4 bg-primary-50">
+                    <Download className="w-8 h-8 text-primary-600 mb-2" />
+                    <h5 className="font-medium text-gray-800">Backup completo</h5>
+                    <p className="text-xs text-gray-500 mt-1">Exportar todos los datos en un solo archivo</p>
+                    <button
+                      onClick={exportTodo}
+                      disabled={exporting}
+                      className="w-full mt-3 px-3 py-1.5 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 transition-colors disabled:opacity-50"
+                    >
+                      {exporting ? 'Exportando...' : 'Exportar todo'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Restaurar backup */}
+              <div className="border-t border-gray-200 pt-6">
+                <h4 className="font-medium text-gray-700 mb-3 flex items-center">
+                  <UploadCloud className="w-4 h-4 mr-2 text-green-600" />
+                  Restaurar backup
+                </h4>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h5 className="font-medium text-green-800">Recuperar datos desde un backup</h5>
+                  <p className="text-xs text-green-600 mt-1">
+                    Selecciona un archivo JSON de backup para restaurar todos los datos.
+                    Esta acción sobrescribirá los datos actuales.
+                  </p>
+                  <button
+                    onClick={handleRestoreClick}
+                    disabled={restoring}
+                    className="mt-3 px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
+                  >
+                    {restoring ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Restaurando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud className="w-4 h-4" />
+                        <span>Seleccionar archivo de backup</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+              
+              {/* Borrar datos de prueba */}
+              <div className="border-t border-gray-200 pt-6">
+                <h4 className="font-medium text-red-600 mb-3 flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-2" />
+                  Zona peligrosa
+                </h4>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <h5 className="font-medium text-red-800">Borrar datos de prueba</h5>
+                  <p className="text-xs text-red-600 mt-1">
+                    Elimina todos los datos de prueba del sistema. Esta acción no se puede deshacer.
+                  </p>
+                  <button
+                    className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+                    onClick={() => alert('Funcionalidad en desarrollo')}
+                  >
+                    Borrar datos de prueba
+                  </button>
+                </div>
               </div>
             </div>
           )}

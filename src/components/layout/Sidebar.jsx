@@ -67,7 +67,7 @@ function Sidebar() {
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
     //{ icon: PlusCircle, label: 'Nueva Recepción', path: '/nueva-recepcion' },
     { icon: Package, label: 'Activas', path: '/reparaciones-activas', badge: activeOrders > 0 ? activeOrders : null },
-    { icon: Clock, label: 'Listas', path: '/reparaciones-activas?estado=listo', badge: readyOrders > 0 ? readyOrders : null },
+    { icon: Clock, label: 'Terminadas', path: '/reparaciones-activas?estado=listo', badge: readyOrders > 0 ? readyOrders : null },
     { icon: History, label: 'Historial', path: '/historial' },
     { icon: Users, label: 'Clientes', path: '/clientes' },
     { icon: Receipt, label: 'Facturación', path: '/facturacion' }

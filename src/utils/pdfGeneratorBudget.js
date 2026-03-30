@@ -104,14 +104,14 @@ export const generateBudgetPDF = async (order, client, descuento = 0, descuentoT
           border-bottom: 2px solid #e0b35a;
         }
         .logo-area img {
-          max-height: 80px;
-          max-width: 200px;
+          max-height: 120px;
+          max-width: 240px;
         }
         .title-area {
           text-align: right;
         }
         .title-area h1 {
-          font-size: 32px;
+          font-size: 28px;
           color: #e0b35a;
           margin-bottom: 10px;
         }
@@ -221,7 +221,7 @@ export const generateBudgetPDF = async (order, client, descuento = 0, descuentoT
           padding-top: 20px;
           border-top: 1px solid #eee;
           text-align: center;
-          font-size: 9px;
+          font-size: 12px;
           color: #999;
         }
         @media print {
@@ -273,6 +273,23 @@ export const generateBudgetPDF = async (order, client, descuento = 0, descuentoT
           </div>
         </div>
 
+        ${order.fallos?.length > 0 ? `
+          <h3>FALLOS DETECTADOS</h3>
+          <table>
+            <thead>
+              <tr><th>Fallo</th><th>Observaciones</th></tr>
+            </thead>
+            <tbody>
+              ${order.fallos.map(f => `
+                <tr>
+                  <td>${f.nombre}</td>
+                  <td>${f.observaciones || '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+           </table>
+        ` : ''}
+
         ${order.trabajos?.length > 0 ? `
           <h3>TRABAJOS A REALIZAR</h3>
           <table>
@@ -287,22 +304,6 @@ export const generateBudgetPDF = async (order, client, descuento = 0, descuentoT
                   <td class="text-right">${(t.tarifa_aplicada || t.tarifa_base || 0).toFixed(2)} €</td>
                   <td class="text-center">${t.descuento ? `${t.descuento}%` : '—'}</td>
                   <td class="text-right">${(t.total || 0).toFixed(2)} €</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        ` : ''}
-
-        ${order.fallos?.length > 0 ? `
-          <h3>FALLOS DETECTADOS</h3>
-          <table>
-            <thead><tr><th>Fallo</th><th>Gravedad</th><th>Observaciones</th></tr></thead>
-            <tbody>
-              ${order.fallos.map(f => `
-                <tr>
-                  <td>${f.nombre}</td>
-                  <td>${f.gravedad?.charAt(0).toUpperCase() + f.gravedad?.slice(1) || 'Media'}</td>
-                  <td>${f.observaciones || '-'}</td>
                 </tr>
               `).join('')}
             </tbody>

@@ -5,7 +5,8 @@ export async function generateReceptionPDF(order, client, type = 'cliente') {
   // Cargar configuración para obtener la URL del logo
   let logoUrl = '/logo-taller.png';
   let shopName = 'LAM-RELOJEROS S.L';
-  let shopAddress = 'C/ Margarita de Parma 1';
+  let shopAddress = 'C/ Margarita de Parma 1 Madrid';
+  let ShopPostalcode = '28050';
   let shopPhone = '672373275';
   let shopEmail = 'tallersanchinarrro@rubiorelojeros.com';
   let shopCIF = 'B-88615489';
@@ -26,6 +27,7 @@ export async function generateReceptionPDF(order, client, type = 'cliente') {
         shopPhone = config.empresa.telefono || shopPhone;
         shopEmail = config.empresa.email || shopEmail;
         shopCIF = config.empresa.cif || shopCIF;
+        ShopPostalcode = config.empresa.postalcode || ShopPostalcode;
       }
     }
   } catch (error) {
@@ -42,7 +44,7 @@ export async function generateReceptionPDF(order, client, type = 'cliente') {
   };
 
   const title = type === 'cliente' 
-    ? 'RESGUARDO DE RECEPCIÓN - COPIA CLIENTE' 
+    ? 'COPIA CLIENTE' 
     : 'RESGUARDO DE RECEPCIÓN - COPIA TALLER';
 
   // Marca de agua profesional
@@ -66,6 +68,7 @@ export async function generateReceptionPDF(order, client, type = 'cliente') {
           padding: 20px;
           color: #333;
           position: relative;
+          margin-top: 50px;
         }
         .container {
           max-width: 1000px;
@@ -100,19 +103,19 @@ export async function generateReceptionPDF(order, client, type = 'cliente') {
           border-bottom: 2px solid #333;
         }
         .logo-area img {
-          max-height: 80px;
-          max-width: 200px;
+          max-height: 120px;
+          max-width: 240px;
         }
         .title-area {
           text-align: right;
         }
         .title-area h1 {
-          font-size: 24px;
+          font-size: 20px;
           color: #333;
           margin-bottom: 8px;
         }
         .doc-number {
-          font-size: 11px;
+          font-size: 15px;
           color: #666;
           margin: 2px 0;
         }
@@ -213,8 +216,8 @@ export async function generateReceptionPDF(order, client, type = 'cliente') {
           padding-top: 15px;
           border-top: 1px solid #eee;
           text-align: center;
-          font-size: 8px;
-          color: #999;
+          font-size: 10px;
+          color: #666;
         }
         
         @media print {
@@ -254,6 +257,7 @@ export async function generateReceptionPDF(order, client, type = 'cliente') {
             <h3>DATOS DEL TALLER</h3>
             <div class="data-row"><span class="data-label">Nombre:</span> ${shopName}</div>
             <div class="data-row"><span class="data-label">Dirección:</span> ${shopAddress}</div>
+            <div class="data-row"><span class="data-label">C.P.:</span> ${ShopPostalcode}</div>
             <div class="data-row"><span class="data-label">Teléfono:</span> ${shopPhone}</div>
             <div class="data-row"><span class="data-label">Email:</span> ${shopEmail}</div>
             <div class="data-row"><span class="data-label">CIF:</span> ${shopCIF}</div>

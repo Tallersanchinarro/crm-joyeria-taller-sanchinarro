@@ -26,7 +26,8 @@ import {
   Euro,
   FileDown,
   Paperclip,
-  Eye
+  Eye,
+  Lock
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { generateReceptionPDF } from '../utils/pdfGenerator';
@@ -40,8 +41,8 @@ const EMPRESA = {
   nombre: 'LAM-RELOJEROS S.L',
   cif: 'B-88615489',
   telefono: '672373275',
-  direccion: 'C/ Ejemplo, 123',
-  ciudad: '28001 Madrid'
+  direccion: 'C/ Margarita de Parma, Nº1',
+  ciudad: '28050 Madrid'
 };
 
 const IVA_PORCENTAJE = 21;
@@ -68,6 +69,7 @@ function DetalleReparacion() {
   });
   
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [budgetDiscount, setBudgetDiscount] = useState(0);
   const [budgetDiscountType, setBudgetDiscountType] = useState('porcentaje');
   const [budgetNotes, setBudgetNotes] = useState('');
@@ -125,13 +127,13 @@ function DetalleReparacion() {
 
   const getStatusColor = (status) => {
     const colors = {
-      'Recibido': 'bg-purple-100 text-purple-700 border-purple-200',
-      'En análisis': 'bg-blue-100 text-blue-700 border-blue-200',
-      'Presupuestado': 'bg-yellow-100 text-yellow-700 border-yellow-200',
-      'Aceptado': 'bg-green-100 text-green-700 border-green-200',
-      'Rechazado': 'bg-red-100 text-red-700 border-red-200',
-      'En reparación': 'bg-orange-100 text-orange-700 border-orange-200',
-      'Listo': 'bg-green-100 text-green-700 border-green-200',
+      'Recibido': 'bg-gray-100 text-gray-700 border-gray-200',
+      'En análisis': 'bg-gray-100 text-gray-700 border-gray-200',
+      'Presupuestado': 'bg-gray-100 text-gray-700 border-gray-200',
+      'Aceptado': 'bg-gray-100 text-gray-700 border-gray-200',
+      'Rechazado': 'bg-gray-100 text-gray-700 border-gray-200',
+      'En reparación': 'bg-gray-100 text-gray-700 border-gray-200',
+      'Listo': 'bg-gray-100 text-gray-700 border-gray-200',
       'Entregado': 'bg-gray-100 text-gray-700 border-gray-200'
     };
     return colors[status] || 'bg-gray-100 text-gray-700 border-gray-200';
@@ -212,6 +214,11 @@ function DetalleReparacion() {
     }
   };
 
+  const handlePreviewBudget = () => {
+    setShowBudgetModal(false);
+    setShowPreviewModal(true);
+  };
+
   const generatePDF = (type) => {
     if (order && client) {
       generateReceptionPDF(order, client, type);
@@ -226,7 +233,7 @@ function DetalleReparacion() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary-200 border-t-primary-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-200 border-t-gray-600 mx-auto mb-4"></div>
           <p className="text-gray-500">Cargando reparación...</p>
         </div>
       </div>
@@ -250,6 +257,9 @@ function DetalleReparacion() {
     );
   }
 
+  // Verificar si hay presupuesto pendiente (no se puede editar)
+  const hasBudget = order.status === 'Presupuestado';
+
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
       {/* Mensaje de éxito flotante */}
@@ -262,7 +272,7 @@ function DetalleReparacion() {
         </div>
       )}
 
-      {/* Header superior - Diseño profesional blanco/negro */}
+      {/* Header superior */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto">
           {/* Primera línea: Estado y navegación */}
@@ -334,6 +344,18 @@ function DetalleReparacion() {
         </div>
       </div>
 
+      {/* Mensaje de bloqueo si hay presupuesto pendiente */}
+      {hasBudget && (
+        <div className="max-w-7xl mx-auto px-6 mt-4">
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg flex items-center">
+            <Lock className="w-5 h-5 text-yellow-600 mr-3 flex-shrink-0" />
+            <p className="text-sm text-yellow-700">
+              Esta reparación tiene un presupuesto pendiente. Para modificarla, debe rechazar el presupuesto actual.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Contenido principal */}
       <div className="max-w-7xl mx-auto px-6 py-6">
         {/* Pestañas principales */}
@@ -349,12 +371,12 @@ function DetalleReparacion() {
                   className={`
                     flex items-center space-x-2 px-5 py-4 text-sm font-medium whitespace-nowrap transition-all
                     ${isActive 
-                      ? 'border-b-2 border-primary-500 text-primary-600 bg-white' 
+                      ? 'border-b-2 border-gray-900 text-gray-900 bg-white' 
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                     }
                   `}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-primary-500' : 'text-gray-500'}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-gray-900' : 'text-gray-500'}`} />
                   <span>{tab.label}</span>
                 </button>
               );
@@ -363,7 +385,7 @@ function DetalleReparacion() {
             {order.status === 'Presupuestado' && (
               <button
                 onClick={handleViewBudget}
-                className="flex items-center space-x-2 px-5 py-4 text-sm font-medium text-green-600 border-b-2 border-green-500 hover:bg-green-50 transition-all ml-auto"
+                className="flex items-center space-x-2 px-5 py-4 text-sm font-medium text-gray-900 border-b-2 border-gray-900 hover:bg-gray-50 transition-all ml-auto"
               >
                 <Eye className="w-4 h-4" />
                 <span>VER PRESUPUESTO</span>
@@ -372,72 +394,56 @@ function DetalleReparacion() {
           </div>
 
           <div className="p-6">
-            {/* PESTAÑA TRABAJOS */}
+            {/* PESTAÑA TRABAJOS - Con bloqueo si hay presupuesto */}
             {activeTab === 'trabajos' && (
               <div className="space-y-6">
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                    <h3 className="font-medium text-gray-700 flex items-center">
-                      <Layers className="w-4 h-4 mr-2 text-gray-500" />
-                      Familias de trabajos
-                    </h3>
+                {hasBudget ? (
+                  <div className="bg-gray-50 rounded-lg p-8 text-center border border-gray-200">
+                    <Lock className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-500 font-medium">Edición bloqueada</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Esta reparación tiene un presupuesto pendiente.
+                    </p>
+                    <p className="text-sm text-gray-400">
+                      Para modificar los trabajos, primero debe rechazar el presupuesto actual.
+                    </p>
                   </div>
-                  <div className="p-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {familiasTrabajos.map((familia) => (
-                      <div
-                        key={familia.id}
-                        className={`
-                          flex items-center justify-between px-3 py-2 rounded-lg text-sm border
-                          ${contadoresPorFamilia[familia.id] > 0 
-                            ? 'bg-blue-50 border-blue-200' 
-                            : 'bg-gray-50 border-gray-200'
-                          }
-                        `}
-                      >
-                        <span className="text-gray-700">{familia.nombre}</span>
-                        {contadoresPorFamilia[familia.id] > 0 ? (
-                          <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-blue-500 text-white">
-                            {contadoresPorFamilia[familia.id]}
-                          </span>
-                        ) : (
-                          <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-600">
-                            0
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <TrabajosPorFamilia 
-                  ordenId={order.id}
-                  onTrabajosChange={setTrabajosSeleccionados}
-                  trabajosIniciales={trabajosSeleccionados}
-                />
+                ) : (
+                  <TrabajosPorFamilia 
+                    ordenId={order.id}
+                    onTrabajosChange={setTrabajosSeleccionados}
+                    trabajosIniciales={trabajosSeleccionados}
+                  />
+                )}
                 
+                {/* Botones de acción */}
                 <div className="flex justify-end space-x-3">
-                  <button
-                    onClick={guardarDiagnostico}
-                    className="px-6 py-2.5 bg-white border-2 border-primary-600 text-primary-600 rounded-lg hover:bg-primary-50 flex items-center space-x-2 transition-colors font-medium"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>Guardar diagnóstico</span>
-                  </button>
-                  
-                  {(trabajosSeleccionados.length > 0 || fallosSeleccionados.length > 0) && order.status !== 'Presupuestado' && (
-                    <button
-                      onClick={() => setShowBudgetModal(true)}
-                      className="px-6 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 flex items-center space-x-2 transition-all shadow-md hover:shadow-lg font-medium"
-                    >
-                      <FileText className="w-4 h-4" />
-                      <span>Generar presupuesto</span>
-                    </button>
+                  {!hasBudget && (
+                    <>
+                      <button
+                        onClick={guardarDiagnostico}
+                        className="px-6 py-2.5 bg-white border-2 border-gray-800 text-gray-800 rounded-lg hover:bg-gray-50 flex items-center space-x-2 transition-colors font-medium"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>Guardar diagnóstico</span>
+                      </button>
+                      
+                      {(trabajosSeleccionados.length > 0 || fallosSeleccionados.length > 0) && (
+                        <button
+                          onClick={() => setShowBudgetModal(true)}
+                          className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center space-x-2 transition-all shadow-md hover:shadow-lg font-medium"
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span>Generar presupuesto</span>
+                        </button>
+                      )}
+                    </>
                   )}
 
                   {order.status === 'Presupuestado' && (
                     <button
                       onClick={handleViewBudget}
-                      className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 flex items-center space-x-2 transition-all shadow-md hover:shadow-lg font-medium"
+                      className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center space-x-2 transition-all shadow-md hover:shadow-lg font-medium"
                     >
                       <Eye className="w-4 h-4" />
                       <span>Ver presupuesto</span>
@@ -447,23 +453,38 @@ function DetalleReparacion() {
               </div>
             )}
 
-            {/* PESTAÑA FALLOS */}
+            {/* PESTAÑA FALLOS - Con bloqueo si hay presupuesto */}
             {activeTab === 'fallos' && (
               <div className="space-y-6">
-                <FallosPorFamilia 
-                  ordenId={order.id}
-                  onFallosChange={setFallosSeleccionados}
-                  fallosIniciales={fallosSeleccionados}
-                />
+                {hasBudget ? (
+                  <div className="bg-gray-50 rounded-lg p-8 text-center border border-gray-200">
+                    <Lock className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-500 font-medium">Edición bloqueada</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Esta reparación tiene un presupuesto pendiente.
+                    </p>
+                    <p className="text-sm text-gray-400">
+                      Para modificar los fallos, primero debe rechazar el presupuesto actual.
+                    </p>
+                  </div>
+                ) : (
+                  <FallosPorFamilia 
+                    ordenId={order.id}
+                    onFallosChange={setFallosSeleccionados}
+                    fallosIniciales={fallosSeleccionados}
+                  />
+                )}
                 
                 <div className="flex justify-end">
-                  <button
-                    onClick={guardarDiagnostico}
-                    className="px-6 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center space-x-2"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>Guardar fallos</span>
-                  </button>
+                  {!hasBudget && (
+                    <button
+                      onClick={guardarDiagnostico}
+                      className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center space-x-2"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Guardar fallos</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -477,12 +498,13 @@ function DetalleReparacion() {
                     value={diagnosis.observaciones}
                     onChange={(e) => setDiagnosis({...diagnosis, observaciones: e.target.value})}
                     rows="4"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                     placeholder="Añade observaciones sobre la reparación..."
+                    disabled={hasBudget}
                   />
                 </div>
                 <div className="flex justify-end">
-                  <button onClick={guardarDiagnostico} className="btn-primary">
+                  <button onClick={guardarDiagnostico} className="btn-primary" disabled={hasBudget}>
                     Guardar cambios
                   </button>
                 </div>
@@ -522,15 +544,15 @@ function DetalleReparacion() {
         </div>
       </div>
 
-      {/* MODAL DE PRESUPUESTO - VERSIÓN PROFESIONAL */}
+      {/* MODAL DE PRESUPUESTO - CON BOTÓN DE VISTA PREVIA */}
       {showBudgetModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl animate-scale-up">
-            <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-6 rounded-t-2xl border-b border-gray-200">
+            <div className="bg-gray-50 p-6 rounded-t-2xl border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-primary-600" />
+                  <div className="w-10 h-10 bg-gray-200 rounded-xl flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-gray-700" />
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-800">Generar presupuesto</h3>
@@ -584,7 +606,7 @@ function DetalleReparacion() {
                         onClick={() => setBudgetDiscountType('porcentaje')}
                         className={`px-2 py-1 text-xs rounded-md transition-colors ${
                           budgetDiscountType === 'porcentaje' 
-                            ? 'bg-white shadow-sm text-primary-600' 
+                            ? 'bg-white shadow-sm text-gray-900' 
                             : 'text-gray-500'
                         }`}
                       >
@@ -595,7 +617,7 @@ function DetalleReparacion() {
                         onClick={() => setBudgetDiscountType('euros')}
                         className={`px-2 py-1 text-xs rounded-md transition-colors ${
                           budgetDiscountType === 'euros' 
-                            ? 'bg-white shadow-sm text-primary-600' 
+                            ? 'bg-white shadow-sm text-gray-900' 
                             : 'text-gray-500'
                         }`}
                       >
@@ -608,7 +630,7 @@ function DetalleReparacion() {
                       type="number"
                       value={budgetDiscount}
                       onChange={(e) => setBudgetDiscount(parseFloat(e.target.value) || 0)}
-                      className="w-20 text-right px-2 py-1 border border-gray-200 rounded-lg focus:ring-1 focus:ring-primary-500 text-sm"
+                      className="w-20 text-right px-2 py-1 border border-gray-200 rounded-lg focus:ring-1 focus:ring-gray-500 text-sm"
                       placeholder="0"
                       min="0"
                       max={budgetDiscountType === 'porcentaje' ? "100" : totales.subtotalConIVA}
@@ -635,10 +657,10 @@ function DetalleReparacion() {
                   </div>
                 </div>
                 
-                <div className="bg-primary-50 p-4 rounded-xl border border-primary-200">
+                <div className="bg-gray-100 p-4 rounded-xl border border-gray-300">
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-primary-800 text-lg">TOTAL (IVA incluido)</span>
-                    <span className="text-2xl font-bold text-primary-600">{totales.totalConIVA.toFixed(2)}€</span>
+                    <span className="font-bold text-gray-800 text-lg">TOTAL (IVA incluido)</span>
+                    <span className="text-2xl font-bold text-gray-900">{totales.totalConIVA.toFixed(2)}€</span>
                   </div>
                 </div>
               </div>
@@ -651,7 +673,7 @@ function DetalleReparacion() {
                   value={budgetNotes}
                   onChange={(e) => setBudgetNotes(e.target.value)}
                   rows="3"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-transparent resize-none"
                   placeholder="Añade información adicional para el cliente (plazo de entrega, condiciones, etc.)..."
                 />
               </div>
@@ -667,13 +689,195 @@ function DetalleReparacion() {
               </button>
               <button
                 type="button"
+                onClick={handlePreviewBudget}
+                className="px-5 py-2.5 bg-gray-600 text-white rounded-xl hover:bg-gray-700 transition-colors flex items-center space-x-2"
+              >
+                <Eye className="w-4 h-4" />
+                <span>Vista previa</span>
+              </button>
+              <button
+                type="button"
                 onClick={guardarPresupuesto}
                 disabled={totales.subtotalConIVA <= 0}
                 className={`px-5 py-2.5 rounded-xl text-white font-medium transition-all flex items-center space-x-2 ${
                   totales.subtotalConIVA > 0 
-                    ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 shadow-md hover:shadow-lg' 
+                    ? 'bg-gray-800 hover:bg-gray-700 shadow-md hover:shadow-lg' 
                     : 'bg-gray-400 cursor-not-allowed'
                 }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span>Generar presupuesto</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE VISTA PREVIA DEL PRESUPUESTO */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-up">
+            <div className="sticky top-0 bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-gray-800">Vista previa del presupuesto</h3>
+              <button 
+                onClick={() => setShowPreviewModal(false)} 
+                className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Cabecera */}
+              <div className="flex justify-between items-start border-b pb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-800">PRESUPUESTO</h2>
+                  <p className="text-sm text-gray-500">Nº {order.order_number}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Fecha</p>
+                  <p className="font-medium">{new Date().toLocaleDateString()}</p>
+                </div>
+              </div>
+
+              {/* Datos cliente y taller */}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-2">TALLER</h3>
+                  <div className="text-sm text-gray-600">
+                    <p>LAM-RELOJEROS S.L</p>
+                    <p>C/ Ejemplo, 123</p>
+                    <p>28001 Madrid</p>
+                    <p>CIF: B-88615489</p>
+                    <p>Tel: 672373275</p>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-2">CLIENTE</h3>
+                  <div className="text-sm text-gray-600">
+                    <p>{client.name}</p>
+                    <p>Tel: {client.phone}</p>
+                    {client.email && <p>Email: {client.email}</p>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Joya */}
+              <div className="border-t pt-4">
+                <h3 className="font-semibold text-gray-700 mb-2">JOYA A REPARAR</h3>
+                <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                  <p><strong>Tipo:</strong> {order.item_type}</p>
+                  <p><strong>Material:</strong> {order.material}</p>
+                  <p><strong>Descripción:</strong> {order.description}</p>
+                </div>
+              </div>
+
+              {/* Trabajos seleccionados */}
+              {trabajosSeleccionados.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-3">TRABAJOS A REALIZAR</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Trabajo</th>
+                          <th className="px-3 py-2 text-center">Cant.</th>
+                          <th className="px-3 py-2 text-right">Precio</th>
+                          <th className="px-3 py-2 text-right">Dto.</th>
+                          <th className="px-3 py-2 text-right">Importe</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {trabajosSeleccionados.map((t, idx) => (
+                          <tr key={idx} className="border-b">
+                            <td className="px-3 py-2">{t.nombre}</td>
+                            <td className="px-3 py-2 text-center">{t.cantidad || 1}</td>
+                            <td className="px-3 py-2 text-right">{t.tarifa_aplicada?.toFixed(2)}€</td>
+                            <td className="px-3 py-2 text-center">{t.descuento || 0}%</td>
+                            <td className="px-3 py-2 text-right font-medium">{(t.total || 0).toFixed(2)}€</td>
+                           </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Fallos */}
+              {fallosSeleccionados.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-3">FALLOS DETECTADOS</h3>
+                  <div className="space-y-2">
+                    {fallosSeleccionados.map((f, idx) => (
+                      <div key={idx} className="bg-gray-50 p-3 rounded-lg text-sm">
+                        <span className="font-medium">{f.nombre}</span>
+                        {f.observaciones && (
+                          <p className="text-xs text-gray-500 mt-1">📝 {f.observaciones}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Notas */}
+              {budgetNotes && (
+                <div className="bg-yellow-50 p-3 rounded-lg text-sm">
+                  <strong>NOTAS:</strong> {budgetNotes}
+                </div>
+              )}
+
+              {/* Totales */}
+              <div className="border-t pt-4">
+                <div className="flex justify-end">
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 w-64">
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Subtotal:</span>
+                        <span>{totales.subtotalConIVA.toFixed(2)}€</span>
+                      </div>
+                      {totales.descuento > 0 && (
+                        <div className="flex justify-between text-green-600">
+                          <span>Descuento:</span>
+                          <span>-{totales.descuento.toFixed(2)}€</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span>Base imponible:</span>
+                        <span>{totales.baseImponible.toFixed(2)}€</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>IVA ({IVA_PORCENTAJE}%):</span>
+                        <span>{totales.iva.toFixed(2)}€</span>
+                      </div>
+                      <div className="border-t pt-2 mt-2">
+                        <div className="flex justify-between font-bold">
+                          <span>TOTAL:</span>
+                          <span>{totales.totalConIVA.toFixed(2)}€</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-gray-50 p-4 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowPreviewModal(false);
+                  setShowBudgetModal(true);
+                }}
+                className="px-5 py-2.5 border border-gray-300 rounded-xl hover:bg-gray-100 transition-colors"
+              >
+                Editar presupuesto
+              </button>
+              <button
+                onClick={() => {
+                  setShowPreviewModal(false);
+                  guardarPresupuesto();
+                }}
+                className="px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-colors flex items-center space-x-2"
               >
                 <FileText className="w-4 h-4" />
                 <span>Generar presupuesto</span>
@@ -689,7 +893,7 @@ function DetalleReparacion() {
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
             <div className="p-6 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-xl font-bold text-gray-800 flex items-center">
-                <Share2 className="w-5 h-5 mr-2 text-primary-500" />
+                <Share2 className="w-5 h-5 mr-2 text-gray-600" />
                 Compartir presupuesto
               </h3>
               <button onClick={() => setShowLinkModal(false)} className="p-2 hover:bg-gray-100 rounded-full">
@@ -698,9 +902,9 @@ function DetalleReparacion() {
             </div>
             
             <div className="p-6 space-y-4">
-              <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-                <p className="text-sm text-blue-800 mb-2 font-medium">🔗 Enlace único:</p>
-                <div className="bg-white p-3 rounded-lg border border-blue-200 text-sm break-all font-mono">
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <p className="text-sm text-gray-700 mb-2 font-medium">🔗 Enlace único:</p>
+                <div className="bg-white p-3 rounded-lg border border-gray-200 text-sm break-all font-mono">
                   {budgetLink.url}
                 </div>
               </div>
@@ -724,7 +928,7 @@ function DetalleReparacion() {
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="py-3 bg-green-600 text-white rounded-lg flex items-center justify-center space-x-2"
+                  className="py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center space-x-2"
                 >
                   <Send className="w-4 h-4" />
                   <span>WhatsApp</span>

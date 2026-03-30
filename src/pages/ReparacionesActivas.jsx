@@ -19,7 +19,9 @@ import {
   ArrowRight,
   Archive,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Send,
+  X
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { generateReceptionPDF } from '../utils/pdfGenerator';
@@ -36,6 +38,9 @@ function ReparacionesActivas() {
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [whatsAppOrder, setWhatsAppOrder] = useState(null);
+  const [whatsAppTipo, setWhatsAppTipo] = useState('');
 
   // Usar useMemo para que se recalcule cuando cambien orders o filtros
   const activeOrders = useMemo(() => 
@@ -82,22 +87,93 @@ function ReparacionesActivas() {
     return colors[status] || 'bg-gray-100 text-gray-700 border-gray-200';
   };
 
-  const getPriorityColor = (priority) => {
-    const colors = {
-      'Baja': 'text-green-600',
-      'Normal': 'text-blue-600',
-      'Alta': 'text-orange-600',
-      'Urgente': 'text-red-600'
-    };
-    return colors[priority] || 'text-gray-600';
-  };
-
   // Abrir modal de cambio de estado
   const openStatusModal = (order, status) => {
     setSelectedOrder(order);
     setNewStatus(status);
     setStatusNote('');
     setShowStatusModal(true);
+  };
+
+  // Abrir modal de WhatsApp
+  const openWhatsAppModal = (order, tipo) => {
+    setWhatsAppOrder(order);
+    setWhatsAppTipo(tipo);
+    setShowWhatsAppModal(true);
+  };
+
+  // Obtener mensaje según el tipo
+  const getMensajeWhatsApp = (tipo, order) => {
+    const clientName = order.client_name || 'Cliente';
+    const itemType = order.item_type || 'joya';
+    
+    switch(tipo) {
+      case 'aceptado':
+        return `Estimado/a ${clientName},
+
+Le informamos que su presupuesto para la reparación de su ${itemType} ha sido ACEPTADO.
+
+En los próximos días comenzaremos con los trabajos necesarios. Le mantendremos informado del proceso.
+
+Gracias por confiar en nosotros.
+
+--
+Taller de Relojería El Corte Inglés Sanchinarro`;
+      
+      case 'listo':
+        return `Estimado/a ${clientName},
+
+Le informamos que su ${itemType} ya está TERMINADO y listo para ser recogido.
+
+Puede pasar a recogerlo cuando lo desee en nuestro establecimiento.
+
+📋 IMPORTANTE: Para la retirada es imprescindible presentar el resguardo de depósito.
+
+🕒 Nuestro horario:
+• Lunes a sábado: 10:00 - 22:00
+• Domingos y festivos: 11:00 - 15:00 y 16:00 - 21:00
+
+Gracias por confiar en nosotros.
+
+--
+Taller de Relojería El Corte Inglés Sanchinarro`;
+      
+      case 'entregado':
+        return `Estimado/a ${clientName},
+
+Le informamos que su ${itemType} ya ha sido ENTREGADO y ha salido de nuestro taller.
+
+Esperamos haber cumplido con sus expectativas. Quedamos a su disposición para cualquier futura reparación o consulta.
+
+Gracias por confiar en nosotros.
+
+--
+Taller de Relojería El Corte Inglés Sanchinarro`;
+      
+      default:
+        return '';
+    }
+  };
+
+  // Enviar WhatsApp al cliente
+  const sendWhatsApp = () => {
+    if (!whatsAppOrder) return;
+    
+    const client = clients.find(c => c.id === whatsAppOrder.client_id);
+    if (!client || !client.phone) {
+      alert('El cliente no tiene número de teléfono registrado');
+      return;
+    }
+
+    const mensaje = getMensajeWhatsApp(whatsAppTipo, whatsAppOrder);
+    const telefonoLimpio = client.phone.replace(/\s+/g, '').replace(/^\+/, '');
+    const url = `https://web.whatsapp.com/send/?phone=${telefonoLimpio}&text=${encodeURIComponent(mensaje)}&app_absent=0`;
+    
+    window.open(url, '_blank');
+    setShowWhatsAppModal(false);
+    setSuccessMessage(`✅ Mensaje enviado por WhatsApp`);
+    setShowSuccessMessage(true);
+    setTimeout(() => setShowSuccessMessage(false), 3000);
   };
 
   // Confirmar cambio de estado
@@ -120,33 +196,47 @@ function ReparacionesActivas() {
         ]
       };
 
-      // Si el estado es "Listo", registrar fecha de finalización
       if (newStatus === 'Listo') {
         updates.completed_at = new Date().toISOString();
       }
 
-      // Si el estado es "Rechazado", actualizar budget_status
+      if (newStatus === 'Entregado') {
+        updates.delivered_at = new Date().toISOString();
+        updates.paid = true;
+      }
+
       if (newStatus === 'Rechazado') {
         updates.budget_status = 'rechazado';
       }
 
-      console.log('Actualizando orden:', selectedOrder.id, updates);
-
-      // Actualizar la orden
       await updateOrder(selectedOrder.id, updates);
 
-      // Mostrar mensaje de éxito
-      setSuccessMessage(`✅ Estado cambiado a: ${newStatus}`);
-      setShowSuccessMessage(true);
-      
-      // Cerrar modal y resetear
       setShowStatusModal(false);
-      setSelectedOrder(null);
-      setNewStatus('');
-      setStatusNote('');
       
-      // El mensaje se ocultará después de 3 segundos
-      setTimeout(() => setShowSuccessMessage(false), 3000);
+      // Determinar qué tipo de mensaje enviar según el nuevo estado
+      let tipoMensaje = null;
+      if (newStatus === 'Aceptado') {
+        tipoMensaje = 'aceptado';
+      } else if (newStatus === 'Listo') {
+        tipoMensaje = 'listo';
+      } else if (newStatus === 'Entregado') {
+        tipoMensaje = 'entregado';
+      }
+      
+      if (tipoMensaje) {
+        const orderCopy = { ...selectedOrder };
+        setSelectedOrder(null);
+        setNewStatus('');
+        setStatusNote('');
+        openWhatsAppModal(orderCopy, tipoMensaje);
+      } else {
+        setSuccessMessage(`✅ Estado cambiado a: ${newStatus}`);
+        setShowSuccessMessage(true);
+        setTimeout(() => setShowSuccessMessage(false), 3000);
+        setSelectedOrder(null);
+        setNewStatus('');
+        setStatusNote('');
+      }
       
     } catch (error) {
       console.error('Error al cambiar estado:', error);
@@ -198,26 +288,23 @@ function ReparacionesActivas() {
 
       await updateOrder(selectedOrder.id, updates);
 
-      // Mostrar mensaje
-      setSuccessMessage('✅ Reparación entregada');
-      setShowSuccessMessage(true);
-
-      // Cerrar modal
       setShowStatusModal(false);
+      
+      // Abrir modal de WhatsApp para mensaje de entregado
+      const orderCopy = { ...selectedOrder };
       setSelectedOrder(null);
       setNewStatus('');
       setStatusNote('');
-
-      // Redirigir al historial después de 1.5 segundos
-      setTimeout(() => {
-        navigate('/historial');
-      }, 1500);
+      openWhatsAppModal(orderCopy, 'entregado');
       
     } catch (error) {
       console.error('Error al entregar:', error);
       setSuccessMessage('❌ Error al entregar');
       setShowSuccessMessage(true);
       setTimeout(() => setShowSuccessMessage(false), 3000);
+      setSelectedOrder(null);
+      setNewStatus('');
+      setStatusNote('');
     } finally {
       setIsUpdating(false);
     }
@@ -244,6 +331,62 @@ function ReparacionesActivas() {
           <div className="bg-green-500 text-white px-6 py-4 rounded-xl shadow-lg flex items-center space-x-3">
             <CheckCircle className="w-5 h-5" />
             <span className="font-medium">{successMessage}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de WhatsApp */}
+      {showWhatsAppModal && whatsAppOrder && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl animate-scale-up">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-gray-800 flex items-center">
+                <Send className="w-5 h-5 mr-2 text-green-600" />
+                Enviar WhatsApp
+              </h3>
+              <button 
+                onClick={() => setShowWhatsAppModal(false)} 
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-500">Cliente</p>
+                <p className="font-medium text-gray-800">{whatsAppOrder.client_name}</p>
+                <p className="text-sm text-gray-500 mt-2">Teléfono</p>
+                <p className="font-medium text-gray-800">
+                  {clients.find(c => c.id === whatsAppOrder.client_id)?.phone || 'No disponible'}
+                </p>
+                <p className="text-sm text-gray-500 mt-2">Joya</p>
+                <p className="font-medium text-gray-800">{whatsAppOrder.item_type || 'No especificado'}</p>
+              </div>
+              
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-800 font-medium">Mensaje a enviar:</p>
+                <p className="text-sm text-blue-700 mt-2 whitespace-pre-line">
+                  {getMensajeWhatsApp(whatsAppTipo, whatsAppOrder)}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3 bg-gray-50 rounded-b-2xl">
+              <button
+                onClick={() => setShowWhatsAppModal(false)}
+                className="px-5 py-2.5 border border-gray-300 rounded-xl hover:bg-gray-100 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={sendWhatsApp}
+                className="px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center space-x-2"
+              >
+                <Send className="w-4 h-4" />
+                <span>Enviar WhatsApp</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -387,7 +530,6 @@ function ReparacionesActivas() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {/* 🔥 CORREGIDO: Siempre mostramos el botón, incluso para rechazado */}
                         <button
                           onClick={() => openStatusModal(order, order.status)}
                           className={`text-xs px-2 py-1 rounded-full border ${getStatusColor(order.status)} hover:opacity-80 transition-opacity flex items-center space-x-1`}
@@ -477,14 +619,12 @@ function ReparacionesActivas() {
             </div>
             
             <div className="p-6 space-y-4">
-              {/* Información de la orden */}
               <div className="bg-gray-50 p-3 rounded-lg">
                 <p className="text-sm font-medium text-gray-800">{selectedOrder.client_name}</p>
                 <p className="text-xs text-gray-600">{selectedOrder.item_type} · {selectedOrder.material}</p>
                 <p className="text-xs text-gray-500 mt-1">Orden: {selectedOrder.order_number}</p>
               </div>
 
-              {/* Selector de estado */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Estado actual: <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(selectedOrder.status)}`}>{selectedOrder.status}</span>
@@ -510,7 +650,6 @@ function ReparacionesActivas() {
                 </select>
               </div>
 
-              {/* Nota opcional */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Nota / Comentario (opcional)
@@ -525,7 +664,6 @@ function ReparacionesActivas() {
                 />
               </div>
 
-              {/* Advertencia según estado */}
               {newStatus === 'Rechazado' && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start space-x-2">
                   <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0" />
@@ -538,19 +676,6 @@ function ReparacionesActivas() {
                 </div>
               )}
 
-              {newStatus === 'Entregado' && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start space-x-2">
-                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-green-800">Confirmar entrega</p>
-                    <p className="text-xs text-green-700">
-                      La reparación pasará al historial como completada.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Historial de cambios */}
               {selectedOrder.status_history && selectedOrder.status_history.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-gray-500 mb-2">Últimos cambios:</p>
@@ -580,40 +705,20 @@ function ReparacionesActivas() {
                 Cancelar
               </button>
               
-              {newStatus === 'Entregado' ? (
-                <button
-                  onClick={handleDelivered}
-                  disabled={isUpdating}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
-                >
-                  {isUpdating ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Procesando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Confirmar entrega</span>
-                    </>
-                  )}
-                </button>
-              ) : (
-                <button
-                  onClick={confirmStatusChange}
-                  disabled={!newStatus || newStatus === selectedOrder.status || isUpdating}
-                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                >
-                  {isUpdating ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Actualizando...</span>
-                    </>
-                  ) : (
-                    <span>Confirmar cambio</span>
-                  )}
-                </button>
-              )}
+              <button
+                onClick={confirmStatusChange}
+                disabled={!newStatus || newStatus === selectedOrder.status || isUpdating}
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                {isUpdating ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Actualizando...</span>
+                  </>
+                ) : (
+                  <span>Confirmar cambio</span>
+                )}
+              </button>
             </div>
           </div>
         </div>

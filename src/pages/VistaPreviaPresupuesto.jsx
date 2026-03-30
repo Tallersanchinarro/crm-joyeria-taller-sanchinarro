@@ -40,9 +40,9 @@ const EMPRESA = {
   nombre: 'LAM-RELOJEROS S.L',
   cif: 'B-88615489',
   telefono: '672373275',
-  email: 'info@lam-relojeros.com',
-  direccion: 'C/ Ejemplo, 123',
-  ciudad: '28001 Madrid'
+  email: 'tallersanchinarro@rubiorelojeros.com',
+  direccion: 'C/ Margarita de Parma, 1',
+  ciudad: '28050 Madrid'
 };
 
 function VistaPreviaPresupuesto() {

@@ -21,7 +21,8 @@ import {
   FileText,
   Shield,
   Percent,
-  Building
+  Building,
+  MapPin
 } from 'lucide-react';
 
 function PresupuestoPublico() {
@@ -34,18 +35,12 @@ function PresupuestoPublico() {
   const [actionTaken, setActionTaken] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
   const [updating, setUpdating] = useState(false);
-  const [empresaConfig, setEmpresaConfig] = useState({
-    nombre: 'LAM-RELOJEROS S.L',
-    logo_url: null,
-    telefono: '672373275',
-    email: 'tallersanchinarro@rubiorelojeros.com',
-    direccion: 'C/ Margarita de parma 1',
-    ciudad: '28050 Madrid'
-  });
+  const [empresaConfig, setEmpresaConfig] = useState(null);
+  const [configLoading, setConfigLoading] = useState(true);
 
   const IVA_PORCENTAJE = 21;
 
-  // Cargar configuración de la empresa
+  // Cargar configuración de la empresa desde Supabase
   useEffect(() => {
     const loadConfig = async () => {
       try {
@@ -55,17 +50,24 @@ function PresupuestoPublico() {
           .single();
 
         if (!error && config) {
+          const empresa = config.empresa || {};
+          // Construir dirección completa sin duplicar ciudad
+          const direccionCompleta = `${empresa.direccion || ''}${empresa.cp ? `, ${empresa.cp}` : ''}`;
+          
           setEmpresaConfig({
-            nombre: config.empresa?.nombre || empresaConfig.nombre,
+            nombre: empresa.nombre || 'LAM-RELOJEROS S.L',
             logo_url: config.logo_url || null,
-            telefono: config.empresa?.telefono || empresaConfig.telefono,
-            email: config.empresa?.email || empresaConfig.email,
-            direccion: config.empresa?.direccion || empresaConfig.direccion,
-            ciudad: config.empresa?.ciudad || empresaConfig.ciudad
+            telefono: empresa.telefono || '672373275',
+            email: empresa.email || 'info@lam-relojeros.com',
+            direccionCompleta: direccionCompleta,
+            ciudad: empresa.ciudad || 'Madrid',
+            cif: empresa.cif || 'B-88615489'
           });
         }
       } catch (error) {
-        console.log('Usando configuración por defecto');
+        console.error('Error cargando configuración:', error);
+      } finally {
+        setConfigLoading(false);
       }
     };
     loadConfig();
@@ -77,7 +79,6 @@ function PresupuestoPublico() {
 
   const loadBudgetData = async () => {
     try {
-      // 1. Buscar el token
       const { data: tokenData, error: tokenError } = await supabase
         .from('budget_tokens')
         .select('*')
@@ -91,7 +92,6 @@ function PresupuestoPublico() {
 
       setTokenInfo(tokenData);
 
-      // 2. Registrar que se vio
       await supabase
         .from('budget_tokens')
         .update({ 
@@ -101,7 +101,6 @@ function PresupuestoPublico() {
         })
         .eq('id', tokenData.id);
 
-      // 3. Cargar la orden
       const { data: orderData, error: orderError } = await supabase
         .from('ordenes')
         .select('*')
@@ -111,7 +110,6 @@ function PresupuestoPublico() {
       if (orderError) throw new Error('Error al cargar el presupuesto');
       setOrder(orderData);
 
-      // 4. Cargar el cliente
       const { data: clientData, error: clientError } = await supabase
         .from('clientes')
         .select('*')
@@ -120,7 +118,6 @@ function PresupuestoPublico() {
 
       if (!clientError) setClient(clientData);
 
-      // 5. Ver si ya respondió
       if (tokenData.client_action) {
         setActionTaken(true);
         setActionMessage(tokenData.client_action === 'aceptado' 
@@ -141,7 +138,6 @@ function PresupuestoPublico() {
     setUpdating(true);
 
     try {
-      // 1. Actualizar el token
       const { error: tokenError } = await supabase
         .from('budget_tokens')
         .update({ 
@@ -152,7 +148,6 @@ function PresupuestoPublico() {
 
       if (tokenError) throw tokenError;
 
-      // 2. Actualizar la orden
       const { error: orderError } = await supabase
         .from('ordenes')
         .update({ 
@@ -176,7 +171,6 @@ function PresupuestoPublico() {
     }
   };
 
-  // Función para obtener color de gravedad
   const getGravedadColor = (gravedad) => {
     const colores = {
       'baja': 'bg-green-100 text-green-700',
@@ -187,7 +181,6 @@ function PresupuestoPublico() {
     return colores[gravedad] || 'bg-gray-100 text-gray-700';
   };
 
-  // Calcular desglose con IVA
   const calcularTotales = () => {
     if (!order) return null;
     
@@ -209,16 +202,12 @@ function PresupuestoPublico() {
 
   const totales = calcularTotales();
 
-  if (loading) {
+  if (loading || configLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="relative">
-            <div className="animate-spin rounded-full h-20 w-20 border-4 border-primary-200 border-t-primary-600 mx-auto mb-6"></div>
-            <Gem className="w-8 h-8 text-primary-600 absolute top-6 left-1/2 transform -translate-x-1/2" />
-          </div>
+          <div className="animate-spin rounded-full h-20 w-20 border-4 border-gray-200 border-t-gray-600 mx-auto mb-6"></div>
           <p className="text-gray-600 text-lg">Cargando presupuesto...</p>
-          <p className="text-sm text-gray-400 mt-2">Por favor, espera un momento</p>
         </div>
       </div>
     );
@@ -226,17 +215,14 @@ function PresupuestoPublico() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
           <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertCircle className="w-10 h-10 text-red-500" />
           </div>
           <h1 className="text-2xl font-bold text-gray-800 mb-3">Enlace no válido</h1>
           <p className="text-gray-600 mb-6">{error}</p>
-          <a 
-            href="/" 
-            className="inline-flex items-center px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-          >
+          <a href="/" className="inline-flex items-center px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors">
             Volver al inicio
           </a>
         </div>
@@ -245,53 +231,74 @@ function PresupuestoPublico() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Header con estilo profesional y logo dinámico */}
-        {/* Header con estilo profesional */}
-<div className="bg-white rounded-t-2xl shadow-xl p-8 border-b border-gray-200">
-  {/* Logo centrado arriba */}
-  <div className="flex justify-center mb-6">
-    {empresaConfig.logo_url ? (
-      <img 
-        src={empresaConfig.logo_url} 
-        alt="Logo" 
-        className="h-14 w-auto object-contain"
-        onError={(e) => { e.target.style.display = 'none'; }}
-      />
-    ) : (
-      <div className="w-14 h-14 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl flex items-center justify-center shadow-lg">
-        <Gem className="w-8 h-8 text-white" />
-      </div>
-    )}
-  </div>
-  
-  {/* Fila con título a izquierda y validez a derecha */}
-  <div className="flex items-center justify-between">
-    <div>
-      <h1 className="text-3xl font-bold text-gray-800">Presupuesto</h1>
-      <p className="text-sm text-gray-500 flex items-center mt-1">
-        <FileText className="w-4 h-4 mr-1" />
-        Referencia: {order?.order_number || 'N/A'}
-      </p>
-    </div>
-    <div className="flex items-center space-x-3 bg-gray-50 px-4 py-2 rounded-xl">
-      <Clock className="w-5 h-5 text-gray-500" />
-      <div>
-        <p className="text-xs text-gray-500">Válido hasta</p>
-        <p className="font-medium text-gray-800">
-          {new Date(tokenInfo?.expires_at).toLocaleDateString('es-ES', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-          })}
-        </p>
-      </div>
-    </div>
-  </div>
-</div>
+        {/* Header con logo y datos de empresa */}
+        <div className="bg-white rounded-t-2xl shadow-xl p-8 border-b border-gray-200">
+          {/* Logo centrado */}
+          <div className="flex justify-center mb-6">
+            {empresaConfig?.logo_url ? (
+              <img 
+                src={empresaConfig.logo_url} 
+                alt="Logo" 
+                className="h-16 w-auto object-contain"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center shadow-lg">
+                <Gem className="w-8 h-8 text-white" />
+              </div>
+            )}
+          </div>
+          
+          {/* Datos de la empresa */}
+          <div className="text-center mb-6">
+            <br></br>
+            <div className="flex flex-wrap items-center justify-center gap-4 mt-2 text-sm text-gray-500">
+              <span className="flex items-center">
+                <MapPin className="w-3 h-3 mr-1" />
+                {empresaConfig?.direccionCompleta || 'C/ Ejemplo, 123'}
+              </span>
+              <span className="flex items-center">
+                <Phone className="w-3 h-3 mr-1" />
+                {empresaConfig?.telefono || '672373275'}
+              </span>
+              <span className="flex items-center">
+                <Mail className="w-3 h-3 mr-1" />
+                {empresaConfig?.email || 'info@lam-relojeros.com'}
+              </span>
+              <span className="flex items-center">
+                <Building className="w-3 h-3 mr-1" />
+                {empresaConfig?.cif || 'B-88615489'}
+              </span>
+            </div>
+          </div>
 
-        {/* Resto del contenido igual... */}
+          {/* Título y validez */}
+          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">Presupuesto</h1>
+              <p className="text-sm text-gray-500 flex items-center mt-1">
+                <FileText className="w-4 h-4 mr-1" />
+                Referencia: {order?.order_number || 'N/A'}
+              </p>
+            </div>
+            <div className="flex items-center space-x-3 bg-gray-50 px-4 py-2 rounded-xl">
+              <Clock className="w-5 h-5 text-gray-500" />
+              <div>
+                <p className="text-xs text-gray-500">Válido hasta</p>
+                <p className="font-medium text-gray-800">
+                  {new Date(tokenInfo?.expires_at).toLocaleDateString('es-ES', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  })}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {actionTaken ? (
           <div className="bg-white rounded-b-2xl shadow-xl p-12 text-center">
             <div className={`w-24 h-24 ${actionMessage.includes('aceptado') ? 'bg-green-100' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-6`}>
@@ -305,22 +312,18 @@ function PresupuestoPublico() {
               {actionMessage.includes('aceptado') ? '¡Gracias por confiar en nosotros!' : 'Entendido'}
             </h2>
             <p className="text-gray-600 mb-8 max-w-md mx-auto">{actionMessage}</p>
-            <a 
-              href="/" 
-              className="inline-flex items-center px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-            >
+            <a href="/" className="inline-flex items-center px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors">
               Volver al inicio
             </a>
           </div>
         ) : (
           <div className="bg-white rounded-b-2xl shadow-xl p-8 space-y-6">
-            {/* Resto del contenido sin cambios... */}
             
             {/* Información del cliente */}
             {client && (
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-xl p-6 border border-gray-200">
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                 <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                  <User className="w-5 h-5 mr-2 text-primary-500" />
+                  <User className="w-5 h-5 mr-2 text-gray-600" />
                   Tus datos
                 </h3>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -344,9 +347,9 @@ function PresupuestoPublico() {
             )}
 
             {/* Información de la joya */}
-            <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-xl p-6 border border-gray-200">
+            <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
               <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                <Package className="w-5 h-5 mr-2 text-primary-500" />
+                <Package className="w-5 h-5 mr-2 text-gray-600" />
                 Tu joya
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -365,21 +368,51 @@ function PresupuestoPublico() {
               </div>
             </div>
 
-            {/* TRABAJOS NECESARIOS */}
-            <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-xl p-6 border border-gray-200">
+            {/* FALLOS DETECTADOS - PRIMERO */}
+            {order.fallos && order.fallos.length > 0 && (
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
+                  <AlertTriangle className="w-5 h-5 mr-2 text-gray-600" />
+                  Fallos detectados
+                </h3>
+                
+                <div className="space-y-3">
+                  {order.fallos.map((fallo, index) => (
+                    <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-start space-x-3">
+                          <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <AlertTriangle className="w-3 h-3 text-gray-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-800">{fallo.nombre}</p>
+                            {fallo.observaciones && (
+                              <p className="text-sm text-gray-500 mt-1">📝 {fallo.observaciones}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TRABAJOS NECESARIOS - DESPUÉS */}
+            <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
               <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                <Wrench className="w-5 h-5 mr-2 text-primary-500" />
+                <Wrench className="w-5 h-5 mr-2 text-gray-600" />
                 Trabajos a realizar
               </h3>
               
               {order.trabajos && order.trabajos.length > 0 ? (
                 <div className="space-y-3">
                   {order.trabajos.map((trabajo, index) => (
-                    <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-primary-200 transition-colors">
+                    <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div className="flex items-start space-x-3">
-                          <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <Wrench className="w-3 h-3 text-blue-600" />
+                          <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <Wrench className="w-3 h-3 text-gray-600" />
                           </div>
                           <div>
                             <p className="font-medium text-gray-800">{trabajo.nombre}</p>
@@ -418,44 +451,9 @@ function PresupuestoPublico() {
               )}
             </div>
 
-            {/* FALLOS DETECTADOS */}
-            {order.fallos && order.fallos.length > 0 && (
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-xl p-6 border border-gray-200">
-                <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                  <AlertTriangle className="w-5 h-5 mr-2 text-orange-500" />
-                  Fallos detectados
-                </h3>
-                
-                <div className="space-y-3">
-                  {order.fallos.map((fallo, index) => (
-                    <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="flex items-start space-x-3">
-                          <div className={`w-6 h-6 ${getGravedadColor(fallo.gravedad)} rounded-full flex items-center justify-center flex-shrink-0 mt-0.5`}>
-                            <AlertTriangle className="w-3 h-3" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-800">{fallo.nombre}</p>
-                            {fallo.observaciones && (
-                              <p className="text-sm text-gray-500 mt-1">📝 {fallo.observaciones}</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="pl-9 sm:pl-0">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs ${getGravedadColor(fallo.gravedad)}`}>
-                            {fallo.gravedad?.charAt(0).toUpperCase() + fallo.gravedad?.slice(1)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* TOTAL CON DESGLOSE DE IVA */}
             {totales && (
-              <div className="bg-gradient-to-br from-primary-50 to-primary-100/50 rounded-xl p-6 border-2 border-primary-200">
+              <div className="bg-gray-100 rounded-xl p-6 border border-gray-300">
                 <div className="space-y-3">
                   {totales.descuento > 0 && (
                     <>
@@ -470,7 +468,7 @@ function PresupuestoPublico() {
                     </>
                   )}
                   
-                  <div className="flex justify-between items-center pt-2 border-t border-primary-200">
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-300">
                     <span className="text-gray-600">Base imponible</span>
                     <span className="font-medium">{totales.baseImponible.toFixed(2)}€</span>
                   </div>
@@ -483,16 +481,16 @@ function PresupuestoPublico() {
                     <span>{totales.iva.toFixed(2)}€</span>
                   </div>
                   
-                  <div className="flex justify-between items-center pt-3 border-t-2 border-primary-300 mt-2">
-                    <span className="font-bold text-primary-800 text-lg">TOTAL (IVA incluido)</span>
-                    <span className="text-2xl font-bold text-primary-600">{totales.totalConIVA.toFixed(2)}€</span>
+                  <div className="flex justify-between items-center pt-3 border-t-2 border-gray-400 mt-2">
+                    <span className="font-bold text-gray-800 text-lg">TOTAL (IVA incluido)</span>
+                    <span className="text-2xl font-bold text-gray-900">{totales.totalConIVA.toFixed(2)}€</span>
                   </div>
                 </div>
                 
                 {order.budget_notes && (
-                  <div className="mt-4 pt-4 border-t border-primary-200">
+                  <div className="mt-4 pt-4 border-t border-gray-300">
                     <p className="text-sm text-gray-600 flex items-start">
-                      <Shield className="w-4 h-4 mr-2 text-primary-500 flex-shrink-0 mt-0.5" />
+                      <Shield className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0 mt-0.5" />
                       <span>📋 {order.budget_notes}</span>
                     </p>
                   </div>
@@ -505,7 +503,7 @@ function PresupuestoPublico() {
               <button
                 onClick={() => handleClientResponse('aceptado')}
                 disabled={updating}
-                className="bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl hover:from-green-600 hover:to-green-700 transition-all transform hover:scale-[1.02] shadow-lg hover:shadow-xl flex items-center justify-center space-x-3 text-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                className="bg-gray-800 text-white py-4 rounded-xl hover:bg-gray-700 transition-all transform hover:scale-[1.02] shadow-lg hover:shadow-xl flex items-center justify-center space-x-3 text-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {updating ? (
                   <Loader className="w-6 h-6 animate-spin" />
@@ -519,7 +517,7 @@ function PresupuestoPublico() {
               <button
                 onClick={() => handleClientResponse('rechazado')}
                 disabled={updating}
-                className="bg-gradient-to-r from-red-500 to-red-600 text-white py-4 rounded-xl hover:from-red-600 hover:to-red-700 transition-all transform hover:scale-[1.02] shadow-lg hover:shadow-xl flex items-center justify-center space-x-3 text-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                className="bg-gray-600 text-white py-4 rounded-xl hover:bg-gray-500 transition-all transform hover:scale-[1.02] shadow-lg hover:shadow-xl flex items-center justify-center space-x-3 text-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {updating ? (
                   <Loader className="w-6 h-6 animate-spin" />

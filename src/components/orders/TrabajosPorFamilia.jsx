@@ -3,8 +3,7 @@ import {
   X,
   Euro,
   Edit2,
-  AlertCircle,
-  CheckCircle
+  AlertCircle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -45,7 +44,6 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
       
       setTrabajos(trabajosPorFamilia);
 
-      // Seleccionar primera familia por defecto
       if (familiasData?.length > 0) {
         setFamiliaSeleccionada(familiasData[0].id);
       }
@@ -159,12 +157,11 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
       </div>
     );
   }
 
-  // Obtener los trabajos de la familia seleccionada
   const trabajosDeFamilia = trabajos[familiaSeleccionada] || [];
   const familiaActual = familias.find(f => f.id === familiaSeleccionada);
 
@@ -178,7 +175,7 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
             className={`
               px-6 py-3 text-sm font-medium border-b-2 transition-colors
               ${modoVista === 'selector'
-                ? 'border-primary-500 text-primary-600'
+                ? 'border-gray-900 text-gray-900'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
               }
             `}
@@ -190,7 +187,7 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
             className={`
               px-6 py-3 text-sm font-medium border-b-2 transition-colors
               ${modoVista === 'tabla'
-                ? 'border-primary-500 text-primary-600'
+                ? 'border-gray-900 text-gray-900'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
               }
             `}
@@ -200,10 +197,10 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
         </div>
 
         <div className="p-4">
-          {/* MODO SELECTOR - Con familias arriba y trabajos debajo */}
+          {/* MODO SELECTOR */}
           {modoVista === 'selector' && (
             <div className="space-y-6">
-              {/* Leyenda de familias (solo visual, sin acordeón) */}
+              {/* Familias - estilo chips */}
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-3">Familias de trabajos</h3>
                 <div className="flex flex-wrap gap-2">
@@ -214,7 +211,7 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
                       className={`
                         flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-all
                         ${familiaSeleccionada === familia.id
-                          ? 'bg-primary-600 text-white shadow-md'
+                          ? 'bg-gray-900 text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }
                       `}
@@ -224,8 +221,8 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
                         <span className={`
                           ml-1 px-2 py-0.5 rounded-full text-xs
                           ${familiaSeleccionada === familia.id
-                            ? 'bg-white text-primary-600'
-                            : 'bg-primary-500 text-white'
+                            ? 'bg-white text-gray-900'
+                            : 'bg-gray-600 text-white'
                           }
                         `}>
                           {contadoresPorFamilia[familia.id]}
@@ -258,7 +255,7 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
                                   type="checkbox"
                                   checked={!!seleccionado}
                                   onChange={() => toggleTrabajo(trabajo)}
-                                  className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                  className="w-5 h-5 rounded border-gray-300 text-gray-700 focus:ring-gray-500"
                                 />
                                 <span className="text-gray-800 font-medium">{trabajo.nombre}</span>
                               </div>
@@ -287,14 +284,14 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
                                     <div className="flex items-center space-x-2">
                                       <span 
                                         onDoubleClick={() => setEditandoPrecio(`selector-${trabajo.id}`)}
-                                        className="text-primary-600 font-medium cursor-pointer hover:bg-primary-50 px-2 py-1 rounded"
+                                        className="text-gray-900 font-medium cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
                                         title="Doble click para editar"
                                       >
                                         {seleccionado.tarifa_aplicada?.toFixed(2)}€
                                       </span>
                                       <button
                                         onClick={() => setEditandoPrecio(`selector-${trabajo.id}`)}
-                                        className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                        className="p-1 text-gray-600 hover:bg-gray-100 rounded"
                                       >
                                         <Edit2 className="w-3 h-3" />
                                       </button>
@@ -308,7 +305,6 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
                               )}
                             </div>
                             
-                            {/* Controles de cantidad y descuento cuando está seleccionado */}
                             {seleccionado && (
                               <div className="flex items-center space-x-4 mt-3 ml-8">
                                 <div className="flex items-center space-x-2">
@@ -351,7 +347,7 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
             </div>
           )}
 
-          {/* MODO TABLA - igual que antes */}
+          {/* MODO TABLA */}
           {modoVista === 'tabla' && (
             <div className="space-y-4">
               {trabajosSeleccionados.length > 0 ? (
@@ -400,14 +396,14 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
                                 <div className="flex items-center justify-end space-x-2">
                                   <span 
                                     onDoubleClick={() => setEditandoPrecio(trabajo.trabajo_id)}
-                                    className="cursor-pointer hover:text-primary-600 hover:bg-primary-50 px-2 py-1 rounded font-medium"
+                                    className="cursor-pointer hover:text-gray-700 hover:bg-gray-100 px-2 py-1 rounded font-medium"
                                     title="Doble click para editar"
                                   >
                                     {trabajo.tarifa_aplicada?.toFixed(2)}€
                                   </span>
                                   <button
                                     onClick={() => setEditandoPrecio(trabajo.trabajo_id)}
-                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                    className="p-1 text-gray-600 hover:bg-gray-100 rounded"
                                   >
                                     <Edit2 className="w-3 h-3" />
                                   </button>
@@ -434,7 +430,7 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
                                 min="1"
                               />
                             </td>
-                            <td className="px-4 py-3 text-sm text-right font-medium text-primary-600">
+                            <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">
                               {(trabajo.total || 0).toFixed(2)}€
                             </td>
                             <td className="px-4 py-3 text-sm text-center">
@@ -454,7 +450,7 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
                         <td colSpan="5" className="px-4 py-3 text-right font-bold text-gray-700">
                           TOTAL TRABAJOS:
                         </td>
-                        <td className="px-4 py-3 text-right font-bold text-primary-600">
+                        <td className="px-4 py-3 text-right font-bold text-gray-900">
                           {trabajosSeleccionados.reduce((sum, t) => sum + (t.total || 0), 0).toFixed(2)}€
                         </td>
                         <td></td>
@@ -476,29 +472,29 @@ function TrabajosPorFamilia({ ordenId, onTrabajosChange, trabajosIniciales = [] 
 
       {/* Resumen de trabajos seleccionados */}
       {trabajosSeleccionados.length > 0 && modoVista === 'selector' && (
-        <div className="bg-gradient-to-r from-blue-50 to-blue-100/50 p-4 rounded-xl border border-blue-200">
+        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="font-medium text-blue-800 flex items-center">
-              <Euro className="w-4 h-4 mr-2" />
+            <h4 className="font-medium text-gray-700 flex items-center">
+              <Euro className="w-4 h-4 mr-2 text-gray-500" />
               Trabajos seleccionados ({trabajosSeleccionados.length})
             </h4>
-            <button onClick={() => setModoVista('tabla')} className="text-xs text-blue-600 hover:text-blue-800">
+            <button onClick={() => setModoVista('tabla')} className="text-xs text-gray-600 hover:text-gray-800">
               Ver detalles
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
             {trabajosSeleccionados.map((trabajo, index) => (
-              <span key={index} className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs bg-white border border-blue-200 text-blue-700">
+              <span key={index} className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs bg-white border border-gray-200 text-gray-700">
                 <span>{trabajo.nombre}</span>
                 <span className="font-bold ml-1">{trabajo.tarifa_aplicada?.toFixed(2)}€</span>
                 {trabajo.cantidad > 1 && <span className="text-xs">(x{trabajo.cantidad})</span>}
                 {trabajo.descuento > 0 && <span className="text-xs">-{trabajo.descuento}%</span>}
-                <button onClick={() => eliminarTrabajo(trabajo.id)} className="ml-1 hover:bg-blue-100 rounded-full p-0.5">
+                <button onClick={() => eliminarTrabajo(trabajo.id)} className="ml-1 hover:bg-gray-100 rounded-full p-0.5">
                   <X className="w-3 h-3" />
                 </button>
               </span>
             ))}
-            <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs bg-primary-100 text-primary-700 font-bold">
+            <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs bg-gray-100 text-gray-700 font-bold">
               Total: {trabajosSeleccionados.reduce((sum, t) => sum + (t.total || 0), 0).toFixed(2)}€
             </span>
           </div>

@@ -119,6 +119,8 @@ function Header() {
   };
 
   const handleLogout = async () => {
+    // Eliminar la marca de sesión activa
+    sessionStorage.removeItem('session_active');
     await supabase.auth.signOut();
     navigate('/login');
   };
