@@ -19,7 +19,6 @@ import {
 import { useApp } from '../context/AppContext';
 import StatsCard from '../components/dashboard/StatsCard';
 import ClientsList from '../components/clients/ClientsList';
-import NewOrderModal from '../components/modals/NewOrderModal';
 import OrderDetailsModal from '../components/modals/OrderDetailsModal';
 
 function Dashboard() {
@@ -36,7 +35,6 @@ function Dashboard() {
   });
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
-  const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [isOrderDetailsModalOpen, setIsOrderDetailsModalOpen] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
 
@@ -80,7 +78,7 @@ function Dashboard() {
     { label: 'Para entregar', value: stats.readyForPickup, color: 'green' }
   ];
 
-  // Alertas principales (solo si hay valores > 0)
+  // Alertas principales
   const alerts = [
     stats.pendingBudget > 0 && {
       icon: FileText,
@@ -105,7 +103,7 @@ function Dashboard() {
     }
   ].filter(Boolean);
 
-  // Últimas órdenes (adaptado a nombres de Supabase)
+  // Últimas órdenes
   const recentOrders = orders
     .filter(o => o.status !== 'Entregado' && o.status !== 'Rechazado')
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -119,6 +117,11 @@ function Dashboard() {
   const handleClientClick = (client) => {
     setSelectedClient(client);
     setIsClientModalOpen(true);
+  };
+
+  // Navegar a nueva recepción
+  const handleNewReception = () => {
+    navigate('/nueva-recepcion');
   };
 
   return (
@@ -137,7 +140,7 @@ function Dashboard() {
         </div>
         
         <button
-          onClick={() => setIsNewOrderModalOpen(true)}
+          onClick={handleNewReception}
           className="btn-primary flex items-center space-x-2 px-4 py-2"
         >
           <Plus className="w-5 h-5" />
@@ -274,12 +277,7 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Modales */}
-      <NewOrderModal
-        isOpen={isNewOrderModalOpen}
-        onClose={() => setIsNewOrderModalOpen(false)}
-      />
-
+      {/* Modal de detalles de orden */}
       <OrderDetailsModal
         order={selectedOrder}
         isOpen={isOrderDetailsModalOpen}
@@ -289,7 +287,7 @@ function Dashboard() {
         }}
       />
 
-      {/* Modal de cliente simple */}
+      {/* Modal de cliente */}
       {isClientModalOpen && selectedClient && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full">
@@ -334,7 +332,7 @@ function Dashboard() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-gray-50 p-2 rounded text-center">
                   <p className="text-xs text-gray-500">Total órdenes</p>
-                  <p className="text-lg font-bold">{selectedClient.totalOrders || 0}</p>
+                  <p className="text-lg font-bold">{orders.filter(o => o.client_id === selectedClient.id).length}</p>
                 </div>
                 <div className="bg-gray-50 p-2 rounded text-center">
                   <p className="text-xs text-gray-500">Activas</p>
@@ -352,7 +350,7 @@ function Dashboard() {
                   setIsClientModalOpen(false);
                   setSelectedClient(null);
                 }}
-                className="btn-primary"
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700"
               >
                 Cerrar
               </button>

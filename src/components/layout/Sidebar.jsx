@@ -65,7 +65,6 @@ function Sidebar() {
   // Menú principal
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    //{ icon: PlusCircle, label: 'Nueva Recepción', path: '/nueva-recepcion' },
     { icon: Package, label: 'Activas', path: '/reparaciones-activas', badge: activeOrders > 0 ? activeOrders : null },
     { icon: Clock, label: 'Terminadas', path: '/reparaciones-activas?estado=listo', badge: readyOrders > 0 ? readyOrders : null },
     { icon: History, label: 'Historial', path: '/historial' },
@@ -101,23 +100,22 @@ function Sidebar() {
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsMobileOpen(false)} />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - AHORA FIJO */}
       <aside
         className={`
-          fixed lg:relative inset-y-0 left-0 z-50
+          fixed inset-y-0 left-0 z-50
           bg-white border-r border-gray-200
           shadow-lg transition-all duration-300 ease-in-out
           flex flex-col h-screen
-          ${isExpanded ? 'lg:w-64' : 'lg:w-20'}
+          ${isExpanded ? 'w-64' : 'w-20'}
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
       >
-        {/* Logo - Cuando está expandido muestra imagen grande, cuando colapsado muestra gema */}
+        {/* Logo */}
         <div className="flex items-center justify-center py-6 border-b border-gray-100">
           {isExpanded ? (
-            // Expandido: muestra el logo grande ocupando todo el ancho
             logoUrl ? (
               <img 
                 src={logoUrl} 
@@ -129,7 +127,6 @@ function Sidebar() {
               <Gem className="w-12 h-12 text-primary-600" />
             )
           ) : (
-            // Colapsado: muestra solo la gema
             <Gem className="w-8 h-8 text-primary-600" />
           )}
         </div>

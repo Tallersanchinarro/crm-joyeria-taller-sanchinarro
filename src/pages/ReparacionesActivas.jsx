@@ -21,7 +21,9 @@ import {
   AlertTriangle,
   RefreshCw,
   Send,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { generateReceptionPDF } from '../utils/pdfGenerator';
@@ -41,6 +43,10 @@ function ReparacionesActivas() {
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [whatsAppOrder, setWhatsAppOrder] = useState(null);
   const [whatsAppTipo, setWhatsAppTipo] = useState('');
+  
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   // Usar useMemo para que se recalcule cuando cambien orders o filtros
   const activeOrders = useMemo(() => 
@@ -72,6 +78,19 @@ function ReparacionesActivas() {
     [filteredOrders]
   );
 
+  // Paginación
+  const totalPages = Math.ceil(sortedOrders.length / itemsPerPage);
+  const paginatedOrders = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    return sortedOrders.slice(start, end);
+  }, [sortedOrders, currentPage]);
+
+  // Resetear página cuando cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus]);
+
   const getStatusColor = (status) => {
     const colors = {
       'Recibido': 'bg-purple-100 text-purple-700 border-purple-200',
@@ -80,7 +99,7 @@ function ReparacionesActivas() {
       'Aceptado': 'bg-green-100 text-green-700 border-green-200',
       'En reparación': 'bg-orange-100 text-orange-700 border-orange-200',
       'Listo': 'bg-green-100 text-green-700 border-green-200',
-      'Rechazado': 'bg-gray-100 text-gray-700 border-gray-200',
+      'Rechazado': 'bg-red-100 text-red-700 border-red-200',
       'Entregado': 'bg-gray-100 text-gray-700 border-gray-200',
       'Archivado': 'bg-gray-100 text-gray-700 border-gray-200'
     };
@@ -114,6 +133,18 @@ function ReparacionesActivas() {
 Le informamos que su presupuesto para la reparación de su ${itemType} ha sido ACEPTADO.
 
 En los próximos días comenzaremos con los trabajos necesarios. Le mantendremos informado del proceso.
+
+Gracias por confiar en nosotros.
+
+--
+Taller de Relojería El Corte Inglés Sanchinarro`;
+      
+      case 'en_reparacion':
+        return `Estimado/a ${clientName},
+
+Le informamos que la reparación de su ${itemType} ha comenzado.
+
+Nuestros técnicos ya están trabajando en ella. Le mantendremos informado cuando esté finalizada.
 
 Gracias por confiar en nosotros.
 
@@ -217,6 +248,8 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
       let tipoMensaje = null;
       if (newStatus === 'Aceptado') {
         tipoMensaje = 'aceptado';
+      } else if (newStatus === 'En reparación') {
+        tipoMensaje = 'en_reparacion';
       } else if (newStatus === 'Listo') {
         tipoMensaje = 'listo';
       } else if (newStatus === 'Entregado') {
@@ -290,7 +323,6 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
 
       setShowStatusModal(false);
       
-      // Abrir modal de WhatsApp para mensaje de entregado
       const orderCopy = { ...selectedOrder };
       setSelectedOrder(null);
       setNewStatus('');
@@ -467,7 +499,7 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {sortedOrders.length === 0 ? (
+              {paginatedOrders.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="px-6 py-12 text-center">
                     <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -481,7 +513,7 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
                   </td>
                 </tr>
               ) : (
-                sortedOrders.map((order) => {
+                paginatedOrders.map((order) => {
                   const isOverdue = order.estimated_date && new Date(order.estimated_date) < new Date() && order.status !== 'Listo' && order.status !== 'Entregado';
                   const isReady = order.status === 'Listo';
                   const isRejected = order.status === 'Rechazado';
@@ -490,7 +522,9 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
                     <tr 
                       key={order.id} 
                       className={`hover:bg-gray-50 transition-colors ${
-                        isOverdue ? 'bg-red-50' : isReady ? 'bg-green-50' : isRejected ? 'bg-gray-50' : ''
+                        isOverdue ? 'bg-red-50' : 
+                        isReady ? 'bg-green-50' : 
+                        isRejected ? 'bg-red-100' : ''
                       }`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -605,6 +639,56 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
             </tbody>
           </table>
         </div>
+        
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, sortedOrders.length)} de {sortedOrders.length} reparaciones
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`px-3 py-1 rounded-lg text-sm ${
+                      currentPage === pageNum
+                        ? 'bg-primary-600 text-white'
+                        : 'border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal de cambio de estado */}

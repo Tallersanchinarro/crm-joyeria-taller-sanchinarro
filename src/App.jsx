@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { NotificationProvider } from './context/NotificationContext';
@@ -24,6 +24,17 @@ import AdminFamilias from './pages/AdminFamilias';
 import AdminFamiliasFallos from './pages/AdminFamiliasFallos';
 
 function App() {
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+
+  // Escuchar cambios en el estado del sidebar desde el evento personalizado
+  useEffect(() => {
+    const handleSidebarChange = (event) => {
+      setIsSidebarExpanded(event.detail.isExpanded);
+    };
+    window.addEventListener('sidebarToggle', handleSidebarChange);
+    return () => window.removeEventListener('sidebarToggle', handleSidebarChange);
+  }, []);
+
   return (
     <AppProvider>
       <NotificationProvider>
@@ -38,8 +49,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <div className="min-h-screen bg-gray-50 flex">
-                  <Sidebar />
-                  <div className="flex-1 flex flex-col">
+                  <Sidebar onExpandChange={setIsSidebarExpanded} />
+                  <div 
+                    className="flex-1 flex flex-col transition-all duration-300"
+                    style={{ 
+                      marginLeft: window.innerWidth >= 1024 
+                        ? (isSidebarExpanded ? '16rem' : '5rem')
+                        : '0'
+                    }}
+                  >
                     <Header />
                     <main className="flex-1 p-4 md:p-6 overflow-auto">
                       <Routes>
@@ -55,7 +73,6 @@ function App() {
                         <Route path="/presupuesto/taller/:orderId" element={<VistaPreviaPresupuesto />} />
                         <Route path="/facturacion" element={<Facturacion />} />
                         <Route path="/configuracion" element={<Configuracion />} />
-
 
                         {/* Rutas de administración */}
                         <Route path="/admin-trabajos" element={<AdminTrabajos />} />

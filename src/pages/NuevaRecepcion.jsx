@@ -15,10 +15,42 @@ import {
   X,
   MapPin,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  ChevronDown
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { generateReceptionPDF } from '../utils/pdfGenerator';
+
+// Códigos de país con banderas (usando flagcdn.com para mejor compatibilidad)
+const phoneCodes = [
+  { code: '+34', country: 'España', flag: 'https://flagcdn.com/es.svg', prefix: '+34' },
+  { code: '+1', country: 'EE.UU./Canadá', flag: 'https://flagcdn.com/us.svg', prefix: '+1' },
+  { code: '+52', country: 'México', flag: 'https://flagcdn.com/mx.svg', prefix: '+52' },
+  { code: '+54', country: 'Argentina', flag: 'https://flagcdn.com/ar.svg', prefix: '+54' },
+  { code: '+57', country: 'Colombia', flag: 'https://flagcdn.com/co.svg', prefix: '+57' },
+  { code: '+56', country: 'Chile', flag: 'https://flagcdn.com/cl.svg', prefix: '+56' },
+  { code: '+51', country: 'Perú', flag: 'https://flagcdn.com/pe.svg', prefix: '+51' },
+  { code: '+58', country: 'Venezuela', flag: 'https://flagcdn.com/ve.svg', prefix: '+58' },
+  { code: '+593', country: 'Ecuador', flag: 'https://flagcdn.com/ec.svg', prefix: '+593' },
+  { code: '+591', country: 'Bolivia', flag: 'https://flagcdn.com/bo.svg', prefix: '+591' },
+  { code: '+595', country: 'Paraguay', flag: 'https://flagcdn.com/py.svg', prefix: '+595' },
+  { code: '+598', country: 'Uruguay', flag: 'https://flagcdn.com/uy.svg', prefix: '+598' },
+  { code: '+502', country: 'Guatemala', flag: 'https://flagcdn.com/gt.svg', prefix: '+502' },
+  { code: '+503', country: 'El Salvador', flag: 'https://flagcdn.com/sv.svg', prefix: '+503' },
+  { code: '+504', country: 'Honduras', flag: 'https://flagcdn.com/hn.svg', prefix: '+504' },
+  { code: '+505', country: 'Nicaragua', flag: 'https://flagcdn.com/ni.svg', prefix: '+505' },
+  { code: '+506', country: 'Costa Rica', flag: 'https://flagcdn.com/cr.svg', prefix: '+506' },
+  { code: '+507', country: 'Panamá', flag: 'https://flagcdn.com/pa.svg', prefix: '+507' },
+  { code: '+53', country: 'Cuba', flag: 'https://flagcdn.com/cu.svg', prefix: '+53' },
+  { code: '+1809', country: 'Rep. Dominicana', flag: 'https://flagcdn.com/do.svg', prefix: '+1809' },
+  { code: '+33', country: 'Francia', flag: 'https://flagcdn.com/fr.svg', prefix: '+33' },
+  { code: '+49', country: 'Alemania', flag: 'https://flagcdn.com/de.svg', prefix: '+49' },
+  { code: '+44', country: 'Reino Unido', flag: 'https://flagcdn.com/gb.svg', prefix: '+44' },
+  { code: '+39', country: 'Italia', flag: 'https://flagcdn.com/it.svg', prefix: '+39' },
+  { code: '+351', country: 'Portugal', flag: 'https://flagcdn.com/pt.svg', prefix: '+351' },
+  { code: '+55', country: 'Brasil', flag: 'https://flagcdn.com/br.svg', prefix: '+55' },
+  { code: '+18', country: 'Bielorrusia', flag: 'https://flagcdn.com/by.svg', prefix: '+18' }
+];
 
 const tiposJoya = [
   'Anillo', 'Collar', 'Pendientes', 'Pulsera', 'Reloj',
@@ -41,6 +73,9 @@ function NuevaRecepcion() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
+  const [selectedPhoneCode, setSelectedPhoneCode] = useState(phoneCodes[0]);
+  const [showPhoneDropdown, setShowPhoneDropdown] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [cliente, setCliente] = useState({
     name: '',
     phone: '',
@@ -58,6 +93,12 @@ function NuevaRecepcion() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [nuevaOrden, setNuevaOrden] = useState(null);
 
+  // Actualizar el teléfono completo cuando cambia el código o el número
+  useEffect(() => {
+    const fullPhone = phoneNumber ? `${selectedPhoneCode.prefix} ${phoneNumber}` : '';
+    setCliente(prev => ({ ...prev, phone: fullPhone }));
+  }, [selectedPhoneCode, phoneNumber]);
+
   // Buscar clientes existentes
   const filteredClients = clients.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -66,6 +107,15 @@ function NuevaRecepcion() {
 
   const handleSelectClient = (client) => {
     setSelectedClient(client);
+    // Intentar extraer código y número del teléfono
+    const phoneMatch = phoneCodes.find(c => client.phone.startsWith(c.prefix));
+    if (phoneMatch) {
+      setSelectedPhoneCode(phoneMatch);
+      const numberPart = client.phone.replace(phoneMatch.prefix, '').trim();
+      setPhoneNumber(numberPart);
+    } else {
+      setPhoneNumber(client.phone);
+    }
     setCliente({
       name: client.name,
       phone: client.phone,
@@ -146,7 +196,7 @@ function NuevaRecepcion() {
   };
 
   // Validar que el paso 1 esté completo
-  const isStep1Complete = cliente.name && cliente.phone;
+  const isStep1Complete = cliente.name && (phoneNumber.trim() !== '' || cliente.phone);
 
   // Validar que el paso 2 esté completo
   const isStep2Complete = recepcion.itemType && recepcion.material && recepcion.description;
@@ -256,7 +306,7 @@ function NuevaRecepcion() {
             )}
           </div>
 
-          {/* Formulario cliente */}
+          {/* Formulario cliente con selector de país con banderas */}
           <div className="border-t pt-4">
             <p className="text-sm text-gray-500 mb-4">O ingresa un cliente nuevo:</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -269,13 +319,69 @@ function NuevaRecepcion() {
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent"
                 />
               </div>
-              <input
-                type="tel"
-                placeholder="Teléfono *"
-                value={cliente.phone}
-                onChange={(e) => setCliente({...cliente, phone: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent"
-              />
+              
+              {/* Campo de teléfono con selector de código de país con banderas */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Teléfono *
+                </label>
+                <div className="flex">
+                  {/* Selector de código de país con bandera */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowPhoneDropdown(!showPhoneDropdown)}
+                      className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded-l-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+                    >
+                      <img 
+                        src={selectedPhoneCode.flag} 
+                        alt={selectedPhoneCode.country}
+                        className="w-5 h-5 object-cover rounded-sm"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                      <span className="text-sm font-medium">{selectedPhoneCode.prefix}</span>
+                      <ChevronDown className="w-4 h-4 text-gray-500" />
+                    </button>
+                    
+                    {showPhoneDropdown && (
+                      <div className="absolute left-0 top-full mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+                        {phoneCodes.map((code) => (
+                          <button
+                            key={code.prefix}
+                            onClick={() => {
+                              setSelectedPhoneCode(code);
+                              setShowPhoneDropdown(false);
+                            }}
+                            className="w-full flex items-center space-x-3 px-3 py-2 hover:bg-gray-50 text-left transition-colors"
+                          >
+                            <img 
+                              src={code.flag} 
+                              alt={code.country}
+                              className="w-6 h-4 object-cover rounded-sm"
+                              onError={(e) => { e.target.style.display = 'none'; }}
+                            />
+                            <span className="text-sm font-medium">{code.prefix}</span>
+                            <span className="text-xs text-gray-500">{code.country}</span>
+                            {selectedPhoneCode.prefix === code.prefix && (
+                              <CheckCircle className="w-4 h-4 text-green-500 ml-auto" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Número de teléfono */}
+                  <input
+                    type="tel"
+                    placeholder="612 345 678"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="flex-1 px-4 py-2 border border-gray-200 border-l-0 rounded-r-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              
               <input
                 type="email"
                 placeholder="Email (opcional)"
@@ -431,6 +537,8 @@ function NuevaRecepcion() {
               onClick={() => {
                 setStep(1);
                 setSelectedClient(null);
+                setSelectedPhoneCode(phoneCodes[0]);
+                setPhoneNumber('');
                 setCliente({ name: '', phone: '', email: '', address: '' });
                 setRecepcion({ itemType: '', material: '', description: '', observations: '' });
                 setNuevaOrden(null);

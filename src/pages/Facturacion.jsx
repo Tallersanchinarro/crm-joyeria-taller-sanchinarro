@@ -11,7 +11,13 @@ import {
   Eye,
   X,
   Loader,
-  DollarSign
+  DollarSign,
+  Printer,
+  User,
+  Phone,
+  Mail,
+  MapPin,
+  Building
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabaseClient';
@@ -28,6 +34,10 @@ function Facturacion() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(false);
+  const [previewInvoice, setPreviewInvoice] = useState(null);
+  const [previewClient, setPreviewClient] = useState(null);
+  const [previewOrder, setPreviewOrder] = useState(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   // Órdenes entregadas que se pueden facturar
   const deliveredOrders = orders.filter(o => 
@@ -89,6 +99,7 @@ function Facturacion() {
         cliente_nif: client?.nif || '',
         cliente_direccion: client?.address || '',
         cliente_email: client?.email || selectedOrder.client_email,
+        cliente_telefono: client?.phone || selectedOrder.client_phone,
         concepto: `Reparación de ${selectedOrder.item_type} - ${selectedOrder.order_number}`,
         base_imponible: baseImponible,
         iva: iva,
@@ -128,14 +139,13 @@ function Facturacion() {
   const descargarFacturaPDF = async (factura) => {
     setDownloading(true);
     try {
-      // Buscar la orden asociada
       const order = orders.find(o => o.id === factura.order_id);
       const client = clients.find(c => c.id === order?.client_id) || {
         name: factura.cliente_nombre,
-        phone: '',
-        email: factura.cliente_email,
-        address: factura.cliente_direccion,
-        nif: factura.cliente_nif
+        phone: factura.cliente_telefono || '',
+        email: factura.cliente_email || '',
+        address: factura.cliente_direccion || '',
+        nif: factura.cliente_nif || ''
       };
       
       await generateFacturaPDF(factura, order, client);
@@ -145,6 +155,25 @@ function Facturacion() {
     } finally {
       setDownloading(false);
     }
+  };
+
+  // Función para previsualizar la factura
+  const previsualizarFactura = async (factura) => {
+    // Buscar la orden asociada
+    const order = orders.find(o => o.id === factura.order_id);
+    // Buscar el cliente asociado
+    const client = clients.find(c => c.id === order?.client_id) || {
+      name: factura.cliente_nombre,
+      phone: factura.cliente_telefono || '',
+      email: factura.cliente_email || '',
+      address: factura.cliente_direccion || '',
+      nif: factura.cliente_nif || ''
+    };
+    
+    setPreviewInvoice(factura);
+    setPreviewOrder(order);
+    setPreviewClient(client);
+    setShowPreviewModal(true);
   };
 
   const formatDate = (dateString) => {
@@ -166,6 +195,188 @@ function Facturacion() {
 
   return (
     <div className="space-y-6">
+      {/* Modal de previsualización de factura */}
+      {showPreviewModal && previewInvoice && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-up">
+            <div className="sticky top-0 bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-gray-800 flex items-center">
+                <Eye className="w-5 h-5 mr-2 text-primary-500" />
+                Vista previa de factura
+              </h3>
+              <button 
+                onClick={() => setShowPreviewModal(false)} 
+                className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Cabecera */}
+              <div className="flex justify-between items-start border-b pb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-800">FACTURA</h2>
+                  <p className="text-sm text-gray-500">Nº {previewInvoice.numero}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Fecha</p>
+                  <p className="font-medium">{formatDate(previewInvoice.fecha)}</p>
+                </div>
+              </div>
+
+              {/* Datos empresa y cliente - COMPLETOS */}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-2 flex items-center">
+                    <Building className="w-4 h-4 mr-2 text-gray-500" />
+                    EMPRESA
+                  </h3>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <p className="font-medium">LAM-RELOJEROS S.L</p>
+                    <p>C/ Ejemplo, 123</p>
+                    <p>28001 Madrid</p>
+                    <p>CIF: B-88615489</p>
+                    <p>Tel: 672373275</p>
+                    <p>Email: info@lam-relojeros.com</p>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-2 flex items-center">
+                    <User className="w-4 h-4 mr-2 text-gray-500" />
+                    CLIENTE
+                  </h3>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <p className="font-medium">{previewClient?.name || previewInvoice.cliente_nombre}</p>
+                    {previewClient?.nif && <p>NIF: {previewClient.nif}</p>}
+                    {previewClient?.phone && (
+                      <p className="flex items-center">
+                        <Phone className="w-3 h-3 mr-1 text-gray-400" />
+                        {previewClient.phone}
+                      </p>
+                    )}
+                    {previewClient?.email && (
+                      <p className="flex items-center">
+                        <Mail className="w-3 h-3 mr-1 text-gray-400" />
+                        {previewClient.email}
+                      </p>
+                    )}
+                    {previewClient?.address && (
+                      <p className="flex items-center">
+                        <MapPin className="w-3 h-3 mr-1 text-gray-400" />
+                        {previewClient.address}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Concepto */}
+              <div className="border-t pt-4">
+                <h3 className="font-semibold text-gray-700 mb-2">CONCEPTO</h3>
+                <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                  {previewInvoice.concepto}
+                </div>
+              </div>
+
+              {/* Detalle de trabajos */}
+              {previewOrder?.trabajos?.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-3">DETALLE DE TRABAJOS</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Trabajo</th>
+                          <th className="px-3 py-2 text-center">Cant.</th>
+                          <th className="px-3 py-2 text-right">Precio</th>
+                          <th className="px-3 py-2 text-right">Dto.</th>
+                          <th className="px-3 py-2 text-right">Importe</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewOrder.trabajos.map((t, idx) => (
+                          <tr key={idx} className="border-b">
+                            <td className="px-3 py-2">{t.nombre}</td>
+                            <td className="px-3 py-2 text-center">{t.cantidad || 1}</td>
+                            <td className="px-3 py-2 text-right">{t.tarifa_aplicada?.toFixed(2)}€</td>
+                            <td className="px-3 py-2 text-center">{t.descuento ? `${t.descuento}%` : '-'}</td>
+                            <td className="px-3 py-2 text-right font-medium">{(t.total || 0).toFixed(2)}€</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Fallos detectados */}
+              {previewOrder?.fallos?.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-3">FALLOS DETECTADOS</h3>
+                  <div className="space-y-2">
+                    {previewOrder.fallos.map((f, idx) => (
+                      <div key={idx} className="bg-gray-50 p-2 rounded-lg text-sm">
+                        <span className="font-medium">{f.nombre}</span>
+                        {f.observaciones && (
+                          <span className="text-xs text-gray-500 ml-2">({f.observaciones})</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Totales */}
+              <div className="flex justify-end">
+                <div className="w-64 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Base imponible</span>
+                      <span>{previewInvoice.base_imponible?.toFixed(2)}€</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">IVA (21%)</span>
+                      <span>{previewInvoice.iva?.toFixed(2)}€</span>
+                    </div>
+                    <div className="border-t pt-2 mt-2">
+                      <div className="flex justify-between font-bold">
+                        <span>TOTAL</span>
+                        <span className="text-primary-600">{previewInvoice.total?.toFixed(2)}€</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Nota legal */}
+              <div className="text-xs text-gray-400 text-center border-t pt-4">
+                <p>Documento no válido como factura hasta su pago.</p>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-gray-50 p-4 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="px-5 py-2.5 border border-gray-300 rounded-xl hover:bg-gray-100 transition-colors"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={() => {
+                  setShowPreviewModal(false);
+                  descargarFacturaPDF(previewInvoice);
+                }}
+                className="px-5 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors flex items-center space-x-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>Descargar PDF</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -290,6 +501,13 @@ function Facturacion() {
                   <div className="flex items-center space-x-3">
                     <p className="font-bold text-primary-600">{invoice.total?.toFixed(2)}€</p>
                     <button 
+                      onClick={() => previsualizarFactura(invoice)}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="Ver factura"
+                    >
+                      <Eye className="w-4 h-4 text-gray-500" />
+                    </button>
+                    <button 
                       onClick={() => descargarFacturaPDF(invoice)}
                       disabled={downloading}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
@@ -300,9 +518,6 @@ function Facturacion() {
                       ) : (
                         <Download className="w-4 h-4 text-gray-500" />
                       )}
-                    </button>
-                    <button className="p-2 hover:bg-gray-100 rounded-lg" title="Ver factura">
-                      <Eye className="w-4 h-4 text-gray-500" />
                     </button>
                   </div>
                 </div>

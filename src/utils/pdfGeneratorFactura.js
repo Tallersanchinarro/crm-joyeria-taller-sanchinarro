@@ -75,6 +75,7 @@ export const generateFacturaPDF = async (factura, order, client) => {
           font-family: 'Helvetica', Arial, sans-serif;
           background: white;
           padding: 20px;
+          margin-top:30px;
           color: #333;
         }
         .container {
@@ -89,18 +90,18 @@ export const generateFacturaPDF = async (factura, order, client) => {
           align-items: flex-start;
           margin-bottom: 30px;
           padding-bottom: 20px;
-          border-bottom: 2px solid #e0b35a;
+          border-bottom: 2px solid #000000;
         }
         .logo-area img {
-          max-height: 80px;
-          max-width: 200px;
+          max-height: 120px;
+          max-width: 240px;
         }
         .title-area {
           text-align: right;
         }
         .title-area h1 {
-          font-size: 32px;
-          color: #e0b35a;
+          font-size: 30px;
+          color: #000000;
           margin-bottom: 10px;
         }
         .invoice-number {
@@ -124,7 +125,7 @@ export const generateFacturaPDF = async (factura, order, client) => {
         }
         .data-box h3 {
           font-size: 14px;
-          color: #e0b35a;
+          color: #000000;
           margin-bottom: 12px;
           border-bottom: 1px solid #eee;
           padding-bottom: 5px;
@@ -146,7 +147,7 @@ export const generateFacturaPDF = async (factura, order, client) => {
         }
         .concepto h3 {
           font-size: 14px;
-          color: #e0b35a;
+          color: #000000;
           margin-bottom: 8px;
         }
         .concepto-text {
@@ -188,7 +189,7 @@ export const generateFacturaPDF = async (factura, order, client) => {
           background: #fafafa;
           padding: 15px 25px;
           border-radius: 8px;
-          border: 1px solid #e0b35a;
+          border: 1px solid #000000;
           min-width: 250px;
         }
         .total-row {
@@ -199,7 +200,7 @@ export const generateFacturaPDF = async (factura, order, client) => {
         }
         .total-row strong {
           font-size: 16px;
-          color: #e0b35a;
+          color: #000000;
         }
         .separator {
           border-top: 1px solid #ddd;
@@ -213,7 +214,7 @@ export const generateFacturaPDF = async (factura, order, client) => {
           padding: 12px;
           border-radius: 5px;
           font-size: 11px;
-          border-left: 3px solid #e0b35a;
+          border-left: 3px solid #000000;
         }
         
         /* PIE */
@@ -222,7 +223,7 @@ export const generateFacturaPDF = async (factura, order, client) => {
           padding-top: 20px;
           border-top: 1px solid #eee;
           text-align: center;
-          font-size: 9px;
+          font-size: 11px;
           color: #999;
         }
         
@@ -319,7 +320,6 @@ export const generateFacturaPDF = async (factura, order, client) => {
 
         <!-- PIE -->
         <div class="footer">
-          //<p>Forma de pago: Transferencia bancaria · IBAN: ${EMPRESA.cuentaBancaria}</p>
           <p>${EMPRESA.nombre} · ${EMPRESA.telefono} · ${EMPRESA.email}</p>
         </div>
       </div>

@@ -16,7 +16,8 @@ import {
   Receipt,
   FileText,
   CheckCircle,
-  XCircle
+  XCircle,
+  Plus
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -119,10 +120,13 @@ function Header() {
   };
 
   const handleLogout = async () => {
-    // Eliminar la marca de sesión activa
     sessionStorage.removeItem('session_active');
     await supabase.auth.signOut();
     navigate('/login');
+  };
+
+  const handleNewReception = () => {
+    navigate('/nueva-recepcion');
   };
 
   const getNotificationIcon = (type) => {
@@ -147,7 +151,6 @@ function Header() {
     return date.toLocaleDateString();
   };
 
-  // Obtener iniciales del usuario
   const getUserInitials = () => {
     return 'L';
   };
@@ -205,6 +208,16 @@ function Header() {
 
         {/* Acciones derecha */}
         <div className="flex items-center space-x-2 md:space-x-3">
+          {/* Botón Nueva Recepción */}
+          <button
+            onClick={handleNewReception}
+            className="flex items-center space-x-2 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            title="Nueva recepción"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline text-sm">Nueva</span>
+          </button>
+
           {/* Notificaciones */}
           <div className="relative" ref={notificationRef}>
             <button
