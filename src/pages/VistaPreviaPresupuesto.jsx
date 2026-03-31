@@ -26,7 +26,8 @@ import {
   Clock,
   FileSignature,
   Building,
-  Eye
+  Eye,
+  MessageCircle
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { generateBudgetPDF } from '../utils/pdfGeneratorBudget';
@@ -69,7 +70,6 @@ function VistaPreviaPresupuesto() {
     try {
       console.log('🔄 Cargando datos de la orden:', orderId);
       
-      // Buscar la orden en el contexto primero
       let foundOrder = orders.find(o => o.id === orderId);
       
       if (!foundOrder) {
@@ -85,7 +85,6 @@ function VistaPreviaPresupuesto() {
 
       setOrder(foundOrder);
       
-      // Buscar cliente
       let foundClient = clients.find(c => c.id === foundOrder.client_id);
       
       if (!foundClient && foundOrder.client_id) {
@@ -181,11 +180,20 @@ function VistaPreviaPresupuesto() {
     setTimeout(() => setCopySuccess(''), 2000);
   };
 
+  // Función para enviar WhatsApp - MISMA QUE EN REPARACIONES ACTIVAS
   const handleWhatsApp = () => {
     if (!client || !budgetLink) return;
+    
     const message = `*PRESUPUESTO DE REPARACIÓN*\n\nHola ${client.name}, aquí tiene el presupuesto de su ${order?.item_type}:\n\n💰 *Total: ${totales.totalConIVA.toFixed(2)}€*\n\nPuede ver el detalle completo y aceptarlo directamente desde este enlace:\n${budgetLink.url}\n\nSaludos cordiales.`;
-    window.open(`https://wa.me/${client.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+    
+    const telefonoLimpio = client.phone?.replace(/\s+/g, '').replace(/^\+/, '');
+    const url = `https://web.whatsapp.com/send/?phone=${telefonoLimpio}&text=${encodeURIComponent(message)}&app_absent=0`;
+    
+    window.open(url, '_blank');
   };
+
+  // Función para enviar WhatsApp desde la vista presupuesto (misma que la anterior)
+  const handleWhatsAppDirect = handleWhatsApp;
 
   const handleStatusChange = async (newStatus) => {
     setUpdating(true);
@@ -514,8 +522,42 @@ function VistaPreviaPresupuesto() {
                 </div>
               )}
 
-              {/* TOTALES CON IVA */}
-              <div className="flex justify-end">
+              {/* TOTALES CON IVA Y BOTONES DE ACCIÓN */}
+              <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+                <div className="flex space-x-2">
+                  {!budgetLink ? (
+                    <button
+                      onClick={handleGenerateLink}
+                      disabled={generatingLink}
+                      className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center space-x-2"
+                    >
+                      {generatingLink ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Share2 className="w-4 h-4" />
+                      )}
+                      <span>Generar enlace</span>
+                    </button>
+                  ) : (
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={copyToClipboard}
+                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center space-x-2"
+                      >
+                        <Copy className="w-4 h-4" />
+                        <span>{copySuccess || 'Copiar'}</span>
+                      </button>
+                      <button
+                        onClick={handleWhatsAppDirect}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>WhatsApp</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="w-full md:w-80 bg-gray-50 p-6 rounded-lg border-2 border-gray-200">
                   <h3 className="font-bold text-gray-700 mb-4 text-center">RESUMEN</h3>
                   <div className="space-y-2">

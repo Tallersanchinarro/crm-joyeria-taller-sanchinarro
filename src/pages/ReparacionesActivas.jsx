@@ -136,7 +136,7 @@ En los próximos días comenzaremos con los trabajos necesarios. Le mantendremos
 
 Gracias por confiar en nosotros.
 
---
+
 Taller de Relojería El Corte Inglés Sanchinarro`;
       
       case 'en_reparacion':
@@ -148,7 +148,7 @@ Nuestros técnicos ya están trabajando en ella. Le mantendremos informado cuand
 
 Gracias por confiar en nosotros.
 
---
+
 Taller de Relojería El Corte Inglés Sanchinarro`;
       
       case 'listo':
@@ -166,7 +166,7 @@ Puede pasar a recogerlo cuando lo desee en nuestro establecimiento.
 
 Gracias por confiar en nosotros.
 
---
+
 Taller de Relojería El Corte Inglés Sanchinarro`;
       
       case 'entregado':
@@ -178,7 +178,7 @@ Esperamos haber cumplido con sus expectativas. Quedamos a su disposición para c
 
 Gracias por confiar en nosotros.
 
---
+
 Taller de Relojería El Corte Inglés Sanchinarro`;
       
       default:
@@ -244,7 +244,6 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
 
       setShowStatusModal(false);
       
-      // Determinar qué tipo de mensaje enviar según el nuevo estado
       let tipoMensaje = null;
       if (newStatus === 'Aceptado') {
         tipoMensaje = 'aceptado';
@@ -518,6 +517,9 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
                   const isReady = order.status === 'Listo';
                   const isRejected = order.status === 'Rechazado';
                   
+                  // Determinar si mostrar el botón de rechazar (solo cuando el estado es "Presupuestado")
+                  const showRejectButton = order.budget_status === 'pendiente' && order.budget && order.status === 'Presupuestado';
+                  
                   return (
                     <tr 
                       key={order.id} 
@@ -620,7 +622,7 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
                             </button>
                           )}
 
-                          {order.budget_status === 'pendiente' && order.budget && (
+                          {showRejectButton && (
                             <button
                               onClick={() => handleMarkAsRejected(order)}
                               className="p-1 hover:bg-red-100 rounded-lg transition-colors"
