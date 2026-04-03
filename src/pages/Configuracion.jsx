@@ -52,12 +52,12 @@ function Configuracion() {
       nombre: 'LAM-RELOJEROS S.L',
       cif: 'B-88615489',
       telefono: '672373275',
-      email: 'info@lam-relojeros.com',
-      direccion: 'C/ Ejemplo, 123',
-      ciudad: '28001 Madrid',
-      cp: '28001',
-      web: 'www.lam-relojeros.com',
-      cuentaBancaria: 'ES00 0000 0000 0000 0000 0000'
+      email: 'tallersanchinarro@rubiorelojeros.com',
+      direccion: 'C/ Margarita, Nº1',
+      ciudad: 'Madrid',
+      cp: '28050',
+      web: 'www.rubiorelojeros.com',
+      //cuentaBancaria: 'ES00 0000 0000 0000 0000 0000'
     },
     impuestos: {
       iva: 21,
@@ -437,8 +437,8 @@ function Configuracion() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-2xl mb-4">
-              <Lock className="w-8 h-8 text-primary-600" />
+            <div className="inline-flex items-center justify-center w-16 h-16 btn-negro rounded-2xl mb-4">
+              <Lock className="w-8 h-8 text-secondary-600" />
             </div>
             <h1 className="text-2xl font-bold text-gray-800">Acceso restringido</h1>
             <p className="text-gray-500 mt-2">Introduce la contraseña para acceder a la configuración</p>
@@ -474,7 +474,7 @@ function Configuracion() {
               </div>
               <button
                 type="submit"
-                className="w-full py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors"
+                className="w-full py-3 btn-negro text-white rounded-xl font-medium hover:bg-primary-700 transition-colors"
               >
                 Acceder
               </button>
@@ -499,7 +499,7 @@ function Configuracion() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center">
-            <Settings className="w-6 h-6 mr-2 text-primary-600" />
+            <Settings className="w-6 h-6 mr-2 text-secondary" />
             Configuración
           </h1>
           <p className="text-sm text-gray-500">
@@ -521,7 +521,7 @@ function Configuracion() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="btn-primary flex items-center space-x-2"
+            className="btn-negro flex items-center space-x-2"
           >
             {saving ? (
               <RefreshCw className="w-4 h-4 animate-spin" />

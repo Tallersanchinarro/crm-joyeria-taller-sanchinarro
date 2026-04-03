@@ -229,6 +229,7 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
 
       if (newStatus === 'Listo') {
         updates.completed_at = new Date().toISOString();
+        updates.notified = false; // 👈 RESETEA EL FLAG DE AVISO PARA NUEVAS ÓRDENES LISTAS
       }
 
       if (newStatus === 'Entregado') {
@@ -440,7 +441,7 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
           </button>
           <button
             onClick={() => navigate('/nueva-recepcion')}
-            className="btn-primary flex items-center space-x-2"
+            className="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2"
           >
             <Package className="w-4 h-4" />
             <span>Nueva recepción</span>
@@ -721,7 +722,7 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
                 <select
                   value={newStatus || selectedOrder.status}
                   onChange={(e) => setNewStatus(e.target.value)}
-                  className="input-field"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   autoFocus
                   disabled={isUpdating}
                 >
@@ -744,7 +745,7 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
                   value={statusNote}
                   onChange={(e) => setStatusNote(e.target.value)}
                   rows="3"
-                  className="input-field"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Añadir observación sobre este cambio..."
                   disabled={isUpdating}
                 />
@@ -785,7 +786,7 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
                   setNewStatus('');
                   setStatusNote('');
                 }}
-                className="btn-secondary"
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 disabled={isUpdating}
               >
                 Cancelar
@@ -794,7 +795,7 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
               <button
                 onClick={confirmStatusChange}
                 disabled={!newStatus || newStatus === selectedOrder.status || isUpdating}
-                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
               >
                 {isUpdating ? (
                   <>

@@ -99,7 +99,6 @@ function Facturacion() {
         cliente_nif: client?.nif || '',
         cliente_direccion: client?.address || '',
         cliente_email: client?.email || selectedOrder.client_email,
-        cliente_telefono: client?.phone || selectedOrder.client_phone,
         concepto: `Reparación de ${selectedOrder.item_type} - ${selectedOrder.order_number}`,
         base_imponible: baseImponible,
         iva: iva,
@@ -142,7 +141,7 @@ function Facturacion() {
       const order = orders.find(o => o.id === factura.order_id);
       const client = clients.find(c => c.id === order?.client_id) || {
         name: factura.cliente_nombre,
-        phone: factura.cliente_telefono || '',
+        phone: '',
         email: factura.cliente_email || '',
         address: factura.cliente_direccion || '',
         nif: factura.cliente_nif || ''
@@ -164,7 +163,7 @@ function Facturacion() {
     // Buscar el cliente asociado
     const client = clients.find(c => c.id === order?.client_id) || {
       name: factura.cliente_nombre,
-      phone: factura.cliente_telefono || '',
+      phone: '',
       email: factura.cliente_email || '',
       address: factura.cliente_direccion || '',
       nif: factura.cliente_nif || ''
@@ -234,11 +233,11 @@ function Facturacion() {
                   </h3>
                   <div className="text-sm text-gray-600 space-y-1">
                     <p className="font-medium">LAM-RELOJEROS S.L</p>
-                    <p>C/ Ejemplo, 123</p>
-                    <p>28001 Madrid</p>
+                    <p>C/ Margarita de Parma, 1</p>
+                    <p>28050 Madrid</p>
                     <p>CIF: B-88615489</p>
                     <p>Tel: 672373275</p>
-                    <p>Email: info@lam-relojeros.com</p>
+                    <p>Email: tallersanchinarro@rubiorelojeros.com</p>
                   </div>
                 </div>
                 <div>

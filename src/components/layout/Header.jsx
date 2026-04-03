@@ -211,7 +211,7 @@ function Header() {
           {/* Botón Nueva Recepción */}
           <button
             onClick={handleNewReception}
-            className="flex items-center space-x-2 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            className="flex items-center space-x-2 px-3 py-2 btn-negro text-white rounded-lg hover:bg-primary-700 transition-colors"
             title="Nueva recepción"
           >
             <Plus className="w-4 h-4" />
@@ -303,7 +303,7 @@ function Header() {
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center space-x-2 p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 btn-negro rounded-full flex items-center justify-center">
                 <span className="text-sm font-medium text-white">{getUserInitials()}</span>
               </div>
               <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
@@ -314,7 +314,7 @@ function Header() {
               <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
                   <p className="text-sm font-medium text-gray-800">Administrador</p>
-                  <p className="text-xs text-gray-500">taller@lam.com</p>
+                  <p className="text-xs text-gray-500">tallersanchinarro@rubiorelojeros.com</p>
                 </div>
                 <div className="py-1">
                   <button

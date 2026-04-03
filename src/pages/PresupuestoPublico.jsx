@@ -51,7 +51,6 @@ function PresupuestoPublico() {
 
         if (!error && config) {
           const empresa = config.empresa || {};
-          // Construir dirección completa sin duplicar ciudad
           const direccionCompleta = `${empresa.direccion || ''}${empresa.cp ? `, ${empresa.cp}` : ''}`;
           
           setEmpresaConfig({
@@ -74,50 +73,85 @@ function PresupuestoPublico() {
   }, []);
 
   useEffect(() => {
-    loadBudgetData();
+    if (token) {
+      loadBudgetData();
+    }
   }, [token]);
 
   const loadBudgetData = async () => {
     try {
+      // ============================================
+      // PASO 1: Establecer el token en Supabase
+      // ============================================
+      try {
+        await supabase.rpc('set_app_current_token', { token_value: token });
+      } catch (rpcError) {
+        console.warn('RPC falló, intentando método alternativo:', rpcError);
+        // Fallback para versión anterior de Supabase
+        await supabase.query(`SET app.current_token = '${token}'`);
+      }
+
+      // ============================================
+      // PASO 2: Verificar token
+      // ============================================
       const { data: tokenData, error: tokenError } = await supabase
         .from('budget_tokens')
         .select('*')
         .eq('token', token)
-        .single();
+        .maybeSingle();
 
-      if (tokenError) throw new Error('Enlace no válido');
+      if (tokenError || !tokenData) {
+        throw new Error('Enlace no válido');
+      }
+
+      // Verificar expiración
       if (new Date(tokenData.expires_at) < new Date()) {
         throw new Error('Este enlace ha expirado (válido 7 días)');
       }
 
       setTokenInfo(tokenData);
 
+      // ============================================
+      // PASO 3: Registrar visualización (sin IP por privacidad)
+      // ============================================
       await supabase
         .from('budget_tokens')
         .update({ 
           viewed_at: new Date().toISOString(),
-          ip_address: 'registrado',
-          user_agent: navigator.userAgent
+          user_agent: navigator.userAgent.substring(0, 255)
         })
         .eq('id', tokenData.id);
 
+      // ============================================
+      // PASO 4: Cargar la orden (las políticas RLS la filtran)
+      // ============================================
       const { data: orderData, error: orderError } = await supabase
         .from('ordenes')
         .select('*')
         .eq('id', tokenData.order_id)
-        .single();
+        .maybeSingle();
 
-      if (orderError) throw new Error('Error al cargar el presupuesto');
+      if (orderError || !orderData) {
+        throw new Error('Error al cargar el presupuesto');
+      }
       setOrder(orderData);
 
+      // ============================================
+      // PASO 5: Cargar el cliente (las políticas RLS lo filtran)
+      // ============================================
       const { data: clientData, error: clientError } = await supabase
         .from('clientes')
         .select('*')
         .eq('id', orderData.client_id)
-        .single();
+        .maybeSingle();
 
-      if (!clientError) setClient(clientData);
+      if (!clientError && clientData) {
+        setClient(clientData);
+      }
 
+      // ============================================
+      // PASO 6: Verificar si ya se tomó una acción
+      // ============================================
       if (tokenData.client_action) {
         setActionTaken(true);
         setActionMessage(tokenData.client_action === 'aceptado' 
@@ -126,6 +160,7 @@ function PresupuestoPublico() {
       }
 
     } catch (error) {
+      console.error('Error loading budget:', error);
       setError(error.message);
     } finally {
       setLoading(false);
@@ -138,6 +173,10 @@ function PresupuestoPublico() {
     setUpdating(true);
 
     try {
+      // Asegurar que el token sigue establecido
+      await supabase.rpc('set_app_current_token', { token_value: token });
+
+      // Actualizar token
       const { error: tokenError } = await supabase
         .from('budget_tokens')
         .update({ 
@@ -148,6 +187,7 @@ function PresupuestoPublico() {
 
       if (tokenError) throw tokenError;
 
+      // Actualizar orden
       const { error: orderError } = await supabase
         .from('ordenes')
         .update({ 
@@ -169,16 +209,6 @@ function PresupuestoPublico() {
     } finally {
       setUpdating(false);
     }
-  };
-
-  const getGravedadColor = (gravedad) => {
-    const colores = {
-      'baja': 'bg-green-100 text-green-700',
-      'media': 'bg-yellow-100 text-yellow-700',
-      'alta': 'bg-orange-100 text-orange-700',
-      'critica': 'bg-red-100 text-red-700'
-    };
-    return colores[gravedad] || 'bg-gray-100 text-gray-700';
   };
 
   const calcularTotales = () => {
@@ -235,7 +265,6 @@ function PresupuestoPublico() {
       <div className="max-w-4xl mx-auto">
         {/* Header con logo y datos de empresa */}
         <div className="bg-white rounded-t-2xl shadow-xl p-8 border-b border-gray-200">
-          {/* Logo centrado */}
           <div className="flex justify-center mb-6">
             {empresaConfig?.logo_url ? (
               <img 
@@ -251,7 +280,6 @@ function PresupuestoPublico() {
             )}
           </div>
           
-          {/* Datos de la empresa */}
           <div className="text-center mb-6">
             <br></br>
             <div className="flex flex-wrap items-center justify-center gap-4 mt-2 text-sm text-gray-500">
@@ -274,7 +302,6 @@ function PresupuestoPublico() {
             </div>
           </div>
 
-          {/* Título y validez */}
           <div className="flex items-center justify-between pt-4 border-t border-gray-100">
             <div>
               <h1 className="text-2xl font-bold text-gray-800">Presupuesto</h1>
@@ -288,11 +315,11 @@ function PresupuestoPublico() {
               <div>
                 <p className="text-xs text-gray-500">Válido hasta</p>
                 <p className="font-medium text-gray-800">
-                  {new Date(tokenInfo?.expires_at).toLocaleDateString('es-ES', {
+                  {tokenInfo?.expires_at ? new Date(tokenInfo.expires_at).toLocaleDateString('es-ES', {
                     day: '2-digit',
                     month: '2-digit',
                     year: 'numeric'
-                  })}
+                  }) : 'No disponible'}
                 </p>
               </div>
             </div>
@@ -355,27 +382,26 @@ function PresupuestoPublico() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-white rounded-lg p-3">
                   <p className="text-xs text-gray-500 mb-1">Tipo</p>
-                  <p className="font-medium text-gray-800">{order.item_type}</p>
+                  <p className="font-medium text-gray-800">{order?.item_type || 'No especificado'}</p>
                 </div>
                 <div className="bg-white rounded-lg p-3">
                   <p className="text-xs text-gray-500 mb-1">Material</p>
-                  <p className="font-medium text-gray-800">{order.material}</p>
+                  <p className="font-medium text-gray-800">{order?.material || 'No especificado'}</p>
                 </div>
               </div>
               <div className="mt-4 bg-white rounded-lg p-3">
                 <p className="text-xs text-gray-500 mb-1">Descripción</p>
-                <p className="text-gray-700">{order.description}</p>
+                <p className="text-gray-700">{order?.description || 'Sin descripción'}</p>
               </div>
             </div>
 
-            {/* FALLOS DETECTADOS - PRIMERO */}
-            {order.fallos && order.fallos.length > 0 && (
+            {/* Fallos detectados */}
+            {order?.fallos && order.fallos.length > 0 && (
               <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                 <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
                   <AlertTriangle className="w-5 h-5 mr-2 text-gray-600" />
                   Fallos detectados
                 </h3>
-                
                 <div className="space-y-3">
                   {order.fallos.map((fallo, index) => (
                     <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
@@ -398,14 +424,14 @@ function PresupuestoPublico() {
               </div>
             )}
 
-            {/* TRABAJOS NECESARIOS - DESPUÉS */}
+            {/* Trabajos a realizar */}
             <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
               <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
                 <Wrench className="w-5 h-5 mr-2 text-gray-600" />
                 Trabajos a realizar
               </h3>
               
-              {order.trabajos && order.trabajos.length > 0 ? (
+              {order?.trabajos && order.trabajos.length > 0 ? (
                 <div className="space-y-3">
                   {order.trabajos.map((trabajo, index) => (
                     <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
@@ -451,7 +477,7 @@ function PresupuestoPublico() {
               )}
             </div>
 
-            {/* TOTAL CON DESGLOSE DE IVA */}
+            {/* Totales */}
             {totales && (
               <div className="bg-gray-100 rounded-xl p-6 border border-gray-300">
                 <div className="space-y-3">
@@ -487,7 +513,7 @@ function PresupuestoPublico() {
                   </div>
                 </div>
                 
-                {order.budget_notes && (
+                {order?.budget_notes && (
                   <div className="mt-4 pt-4 border-t border-gray-300">
                     <p className="text-sm text-gray-600 flex items-start">
                       <Shield className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0 mt-0.5" />

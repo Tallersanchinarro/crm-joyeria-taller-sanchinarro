@@ -17,6 +17,7 @@ import Notificaciones from './pages/Notificaciones';
 import VistaPreviaPresupuesto from './pages/VistaPreviaPresupuesto';
 import Facturacion from './pages/Facturacion';
 import Configuracion from './pages/Configuracion';
+import AvisosPendientes from './pages/AvisosPendientes'; // 👈 IMPORTAR NUEVA PÁGINA
 // Páginas de administración
 import AdminTrabajos from './pages/AdminTrabajos';
 import AdminFallos from './pages/AdminFallos';
@@ -73,6 +74,7 @@ function App() {
                         <Route path="/presupuesto/taller/:orderId" element={<VistaPreviaPresupuesto />} />
                         <Route path="/facturacion" element={<Facturacion />} />
                         <Route path="/configuracion" element={<Configuracion />} />
+                        <Route path="/avisos-pendientes" element={<AvisosPendientes />} /> {/* 👈 NUEVA RUTA */}
 
                         {/* Rutas de administración */}
                         <Route path="/admin-trabajos" element={<AdminTrabajos />} />
