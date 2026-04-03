@@ -339,9 +339,7 @@ function PresupuestoPublico() {
               {actionMessage.includes('aceptado') ? '¡Gracias por confiar en nosotros!' : 'Entendido'}
             </h2>
             <p className="text-gray-600 mb-8 max-w-md mx-auto">{actionMessage}</p>
-            <a href="/" className="inline-flex items-center px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors">
-              Volver al inicio
-            </a>
+           
           </div>
         ) : (
           <div className="bg-white rounded-b-2xl shadow-xl p-8 space-y-6">
