@@ -57,7 +57,7 @@ function PresupuestoPublico() {
             nombre: empresa.nombre || 'LAM-RELOJEROS S.L',
             logo_url: config.logo_url || null,
             telefono: empresa.telefono || '672373275',
-            email: empresa.email || 'info@lam-relojeros.com',
+            email: empresa.email || 'tallersanchinarro@rubiorelojeros.com',
             direccionCompleta: direccionCompleta,
             ciudad: empresa.ciudad || 'Madrid',
             cif: empresa.cif || 'B-88615489'
@@ -155,7 +155,7 @@ function PresupuestoPublico() {
       if (tokenData.client_action) {
         setActionTaken(true);
         setActionMessage(tokenData.client_action === 'aceptado' 
-          ? '✅ Ya has aceptado este presupuesto. Te contactaremos para comenzar la reparación.' 
+          ? '✅ Ya has aceptado este presupuesto. Gracias por confiar en nuestro taller.' 
           : '❌ Ya has rechazado este presupuesto. Si cambias de opinión, contáctanos.');
       }
 

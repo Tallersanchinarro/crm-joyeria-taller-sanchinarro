@@ -41,7 +41,7 @@ const EMPRESA = {
   nombre: 'LAM-RELOJEROS S.L',
   cif: 'B-88615489',
   telefono: '672373275',
-  direccion: 'C/ Margarita de Parma, Nº1',
+  direccion: 'C/ Margarita de Parma Nº1',
   ciudad: '28050 Madrid'
 };
 
@@ -344,14 +344,39 @@ function DetalleReparacion() {
         </div>
       </div>
 
-      {/* Mensaje de bloqueo si hay presupuesto pendiente */}
+           {/* Mensaje de bloqueo si hay presupuesto pendiente */}
       {hasBudget && (
         <div className="max-w-7xl mx-auto px-6 mt-4">
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg flex items-center">
-            <Lock className="w-5 h-5 text-yellow-600 mr-3 flex-shrink-0" />
-            <p className="text-sm text-yellow-700">
-              Esta reparación tiene un presupuesto pendiente. Para modificarla, debe rechazar el presupuesto actual.
-            </p>
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg flex items-center justify-between">
+            <div className="flex items-center">
+              <Lock className="w-5 h-5 text-yellow-600 mr-3 flex-shrink-0" />
+              <p className="text-sm text-yellow-700">
+                Esta reparación tiene un presupuesto pendiente. Para modificarla, debe rechazar el presupuesto actual.
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                if (window.confirm('¿Estás seguro de que quieres rechazar el presupuesto? Podrás editar la reparación nuevamente.')) {
+                  try {
+                    await updateOrder(order.id, {
+                      budget_status: 'rechazado',
+                      status: 'En análisis'
+                    });
+                    setSuccessMessage('✅ Presupuesto rechazado, ahora puedes editar la reparación');
+                    setShowSuccessMessage(true);
+                    setTimeout(() => {
+                      window.location.reload();
+                    }, 1500);
+                  } catch (error) {
+                    console.error('Error al rechazar presupuesto:', error);
+                    alert('Error al rechazar el presupuesto: ' + error.message);
+                  }
+                }
+              }}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+            >
+              Rechazar presupuesto
+            </button>
           </div>
         </div>
       )}

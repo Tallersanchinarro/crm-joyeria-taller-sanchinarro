@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
@@ -11,7 +11,19 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
+  // Logo hardcodeado (como estaba antes)
   const logoUrl = 'https://zregziaibucxzdwuekao.supabase.co/storage/v1/object/public/logos/logo_1774433781354.png';
+
+  // Verificar si ya hay sesión activa
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        navigate('/dashboard');
+      }
+    };
+    checkSession();
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26,12 +38,16 @@ function Login() {
 
       if (error) throw error;
       
-      // Guardar que la sesión está activa
       sessionStorage.setItem('session_active', 'true');
-      
       navigate('/dashboard');
     } catch (error) {
-      setError(error.message);
+      if (error.message === 'Failed to fetch') {
+        setError('Error de conexión. Verifica tu red.');
+      } else if (error.message === 'Invalid login credentials') {
+        setError('Email o contraseña incorrectos');
+      } else {
+        setError(error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -40,12 +56,12 @@ function Login() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Logo - centrado, sin contenedores innecesarios */}
+        {/* Logo - hardcodeado */}
         <div className="flex justify-center mb-12">
           <img 
             src={logoUrl} 
             alt="Logo" 
-            className="w-86 h-auto object-contain"
+            className="w-48 md:w-56 h-auto object-contain"
             onError={(e) => {
               e.target.style.display = 'none';
               console.error('Logo no encontrado');
@@ -53,7 +69,7 @@ function Login() {
           />
         </div>
 
-        {/* Formulario - limpio y profesional */}
+        {/* Formulario */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <h2 className="text-2xl font-semibold text-gray-800 text-center mb-8">
             Iniciar sesión
@@ -79,6 +95,7 @@ function Login() {
                   className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all"
                   placeholder="taller@ejemplo.com"
                   required
+                  autoComplete="email"
                 />
               </div>
             </div>
@@ -96,6 +113,7 @@ function Login() {
                   className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent transition-all"
                   placeholder="••••••••"
                   required
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
@@ -117,7 +135,7 @@ function Login() {
             </button>
           </form>
 
-          {/* Línea decorativa sutil */}
+          {/* Línea decorativa */}
           <div className="mt-8 pt-6 border-t border-gray-100 text-center">
             <p className="text-xs text-gray-400">
               Sistema de gestión para taller de joyería

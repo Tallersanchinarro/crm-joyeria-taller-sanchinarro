@@ -184,7 +184,7 @@ function VistaPreviaPresupuesto() {
   const handleWhatsApp = () => {
     if (!client || !budgetLink) return;
     
-    const message = `*PRESUPUESTO DE REPARACIÓN*\n\nHola ${client.name}, aquí tiene el presupuesto de su ${order?.item_type}:\n\n💰 *Total: ${totales.totalConIVA.toFixed(2)}€*\n\nPuede ver el detalle completo y aceptarlo directamente desde este enlace:\n${budgetLink.url}\n\nSaludos cordiales.`;
+    const message = `*PRESUPUESTO DE REPARACIÓN*\n\nHola ${client.name}, aquí tiene el presupuesto de su ${order?.item_type}:\n\nPuede ver el detalle completo y aceptarlo directamente desde este enlace:\n${budgetLink.url}\n\nSaludos cordiales.`;
     
     const telefonoLimpio = client.phone?.replace(/\s+/g, '').replace(/^\+/, '');
     const url = `https://web.whatsapp.com/send/?phone=${telefonoLimpio}&text=${encodeURIComponent(message)}&app_absent=0`;

@@ -84,7 +84,12 @@ function Facturacion() {
     
     try {
       const client = clients.find(c => c.id === selectedOrder.client_id);
-      const numeroFactura = `F${new Date().getFullYear()}${String(invoices.length + 1).padStart(4, '0')}`;
+      
+      // 🔧 NUEVO FORMATO DE FACTURA: LAM/{numero_orden}-{año}
+      const orderNumberMatch = selectedOrder.order_number.match(/LAM\/(\d+)/);
+      const orderNum = orderNumberMatch ? orderNumberMatch[1] : '0';
+      const añoActual = new Date().getFullYear();
+      const numeroFactura = `LAM/${orderNum}-${añoActual}`;
       
       // Calcular base imponible e IVA
       const totalConIVA = selectedOrder.budget;
@@ -187,7 +192,7 @@ function Facturacion() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
       </div>
     );
   }
@@ -200,7 +205,7 @@ function Facturacion() {
           <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-up">
             <div className="sticky top-0 bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-xl font-bold text-gray-800 flex items-center">
-                <Eye className="w-5 h-5 mr-2 text-primary-500" />
+                <Eye className="w-5 h-5 mr-2 text-gray-700" />
                 Vista previa de factura
               </h3>
               <button 
@@ -224,7 +229,7 @@ function Facturacion() {
                 </div>
               </div>
 
-              {/* Datos empresa y cliente - COMPLETOS */}
+              {/* Datos empresa y cliente */}
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <h3 className="font-semibold text-gray-700 mb-2 flex items-center">
@@ -341,7 +346,7 @@ function Facturacion() {
                     <div className="border-t pt-2 mt-2">
                       <div className="flex justify-between font-bold">
                         <span>TOTAL</span>
-                        <span className="text-primary-600">{previewInvoice.total?.toFixed(2)}€</span>
+                        <span className="text-gray-900">{previewInvoice.total?.toFixed(2)}€</span>
                       </div>
                     </div>
                   </div>
@@ -366,7 +371,7 @@ function Facturacion() {
                   setShowPreviewModal(false);
                   descargarFacturaPDF(previewInvoice);
                 }}
-                className="px-5 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors flex items-center space-x-2"
+                className="px-5 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors flex items-center space-x-2"
               >
                 <Download className="w-4 h-4" />
                 <span>Descargar PDF</span>
@@ -380,7 +385,7 @@ function Facturacion() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center">
-            <Receipt className="w-6 h-6 mr-2 text-primary-600" />
+            <Receipt className="w-6 h-6 mr-2 text-gray-800" />
             Facturación
           </h1>
           <p className="text-sm text-gray-500">
@@ -406,7 +411,7 @@ function Facturacion() {
             placeholder="Buscar por orden, cliente o joya..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
           />
         </div>
       </div>
@@ -424,7 +429,7 @@ function Facturacion() {
             <p className="text-gray-500">No hay órdenes pendientes de facturar</p>
             <button
               onClick={() => navigate('/historial')}
-              className="mt-2 text-primary-600 hover:text-primary-700 text-sm font-medium"
+              className="mt-2 text-gray-600 hover:text-gray-800 text-sm font-medium"
             >
               Ver historial
             </button>
@@ -455,14 +460,14 @@ function Facturacion() {
                     <div className="flex items-center space-x-4">
                       <div className="text-right">
                         <p className="text-sm text-gray-500">Total</p>
-                        <p className="text-lg font-bold text-primary-600">{order.budget}€</p>
+                        <p className="text-lg font-bold text-gray-900">{order.budget}€</p>
                       </div>
                       <button
                         onClick={() => {
                           setSelectedOrder(order);
                           setShowInvoiceModal(true);
                         }}
-                        className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center space-x-2"
+                        className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2"
                       >
                         <FileText className="w-4 h-4" />
                         <span>Facturar</span>
@@ -498,7 +503,7 @@ function Facturacion() {
                     <p className="text-xs text-gray-500">{invoice.concepto}</p>
                   </div>
                   <div className="flex items-center space-x-3">
-                    <p className="font-bold text-primary-600">{invoice.total?.toFixed(2)}€</p>
+                    <p className="font-bold text-gray-900">{invoice.total?.toFixed(2)}€</p>
                     <button 
                       onClick={() => previsualizarFactura(invoice)}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -532,7 +537,7 @@ function Facturacion() {
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
             <div className="p-6 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-xl font-bold text-gray-800 flex items-center">
-                <Receipt className="w-5 h-5 mr-2 text-primary-500" />
+                <Receipt className="w-5 h-5 mr-2 text-gray-700" />
                 Generar factura
               </h3>
               <button onClick={() => setShowInvoiceModal(false)} className="p-2 hover:bg-gray-100 rounded-full">
@@ -561,7 +566,7 @@ function Facturacion() {
                 </div>
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
                   <span className="text-gray-800">Total</span>
-                  <span className="text-primary-600">{selectedOrder.budget}€</span>
+                  <span className="text-gray-900">{selectedOrder.budget}€</span>
                 </div>
               </div>
             </div>
@@ -576,7 +581,7 @@ function Facturacion() {
               <button
                 onClick={generarFactura}
                 disabled={generating}
-                className="px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 flex items-center space-x-2 disabled:opacity-50"
+                className="px-5 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 flex items-center space-x-2 disabled:opacity-50"
               >
                 {generating ? (
                   <Loader className="w-4 h-4 animate-spin" />

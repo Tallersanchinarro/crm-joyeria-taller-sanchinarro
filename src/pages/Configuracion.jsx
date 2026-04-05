@@ -30,10 +30,10 @@ import {
   EyeOff
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
-import { useNotification } from '../context/NotificationContext';
+import { useNotifications } from '../context/NotificationContext';
 
 function Configuracion() {
-  const { showNotification } = useNotification();
+  const { showNotification } = useNotifications();
   const [activeTab, setActiveTab] = useState('empresa');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -57,7 +57,7 @@ function Configuracion() {
       ciudad: 'Madrid',
       cp: '28050',
       web: 'www.rubiorelojeros.com',
-      //cuentaBancaria: 'ES00 0000 0000 0000 0000 0000'
+      cuentaBancaria: ''
     },
     impuestos: {
       iva: 21,
@@ -140,7 +140,7 @@ function Configuracion() {
       if (logoFile) {
         const fileExt = logoFile.name.split('.').pop();
         const fileName = `logo_${Date.now()}.${fileExt}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('logos')
           .upload(fileName, logoFile);
 
@@ -153,17 +153,24 @@ function Configuracion() {
       }
 
       const configToSave = {
-        ...config,
+        id: 1,
+        empresa: config.empresa,
+        impuestos: config.impuestos,
+        notificaciones: config.notificaciones,
         logo_url: logoUrl,
-        config_password: configPassword,
+        config_password: configPassword || config.config_password,
         updated_at: new Date().toISOString()
       };
 
       const { error } = await supabase
         .from('configuracion')
-        .upsert({ id: 1, ...configToSave });
+        .upsert(configToSave);
 
       if (error) throw error;
+
+      if (configPassword) {
+        setConfig(prev => ({ ...prev, config_password: configPassword }));
+      }
 
       showNotification('Configuración guardada correctamente', 'success');
       
@@ -424,6 +431,55 @@ function Configuracion() {
     input.click();
   };
 
+  // ========== FUNCIÓN BORRAR DATOS DE PRUEBA ==========
+  
+  const borrarDatosPrueba = async () => {
+    const confirmar = window.confirm(
+      '⚠️ ¿ESTÁS SEGURO?\n\n' +
+      'Esta acción eliminará TODOS los datos de prueba:\n' +
+      '• Clientes\n' +
+      '• Órdenes\n' +
+      '• Facturas\n' +
+      '• Tokens de presupuesto\n\n' +
+      'Esta acción NO se puede deshacer.\n\n' +
+      '¿Confirmas que quieres continuar?'
+    );
+    
+    if (!confirmar) return;
+    
+    const confirmar2 = window.prompt(
+      '⚠️ CONFIRMACIÓN FINAL\n\n' +
+      'Escribe "BORRAR" para confirmar la eliminación de TODOS los datos:'
+    );
+    
+    if (confirmar2 !== 'BORRAR') {
+      showNotification('❌ Operación cancelada - Texto incorrecto', 'error');
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      await supabase.from('budget_tokens').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('ordenes_trabajos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('facturas').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('ordenes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('clientes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      
+      showNotification('✅ Todos los datos han sido eliminados correctamente', 'success');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Error borrando datos:', error);
+      showNotification('❌ Error al borrar los datos: ' + error.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const tabs = [
     { id: 'empresa', label: 'Empresa', icon: Building },
     { id: 'impuestos', label: 'Impuestos', icon: Percent },
@@ -437,8 +493,8 @@ function Configuracion() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 btn-negro rounded-2xl mb-4">
-              <Lock className="w-8 h-8 text-secondary-600" />
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-900 rounded-2xl mb-4">
+              <Lock className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-gray-800">Acceso restringido</h1>
             <p className="text-gray-500 mt-2">Introduce la contraseña para acceder a la configuración</p>
@@ -456,7 +512,7 @@ function Configuracion() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-500"
                     placeholder="••••••••"
                     autoFocus
                   />
@@ -474,7 +530,7 @@ function Configuracion() {
               </div>
               <button
                 type="submit"
-                className="w-full py-3 btn-negro text-white rounded-xl font-medium hover:bg-primary-700 transition-colors"
+                className="w-full py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-colors"
               >
                 Acceder
               </button>
@@ -488,7 +544,7 @@ function Configuracion() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
       </div>
     );
   }
@@ -499,7 +555,7 @@ function Configuracion() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center">
-            <Settings className="w-6 h-6 mr-2 text-secondary" />
+            <Settings className="w-6 h-6 mr-2 text-gray-800" />
             Configuración
           </h1>
           <p className="text-sm text-gray-500">
@@ -521,7 +577,7 @@ function Configuracion() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="btn-negro flex items-center space-x-2"
+            className="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2"
           >
             {saving ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
@@ -546,7 +602,7 @@ function Configuracion() {
                 className={`
                   flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-all
                   ${isActive 
-                    ? 'border-b-2 border-primary-500 text-primary-600 bg-white' 
+                    ? 'border-b-2 border-gray-900 text-gray-900 bg-white' 
                     : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                   }
                 `}
@@ -563,7 +619,7 @@ function Configuracion() {
           {activeTab === 'empresa' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-                <Building className="w-5 h-5 mr-2 text-primary-500" />
+                <Building className="w-5 h-5 mr-2 text-gray-600" />
                 Datos de la empresa
               </h3>
               
@@ -616,7 +672,7 @@ function Configuracion() {
                     type="text"
                     value={config.empresa.nombre}
                     onChange={(e) => setConfig({...config, empresa: {...config.empresa, nombre: e.target.value}})}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                 </div>
                 <div>
@@ -627,7 +683,7 @@ function Configuracion() {
                     type="text"
                     value={config.empresa.cif}
                     onChange={(e) => setConfig({...config, empresa: {...config.empresa, cif: e.target.value}})}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                 </div>
                 <div>
@@ -638,7 +694,7 @@ function Configuracion() {
                     type="tel"
                     value={config.empresa.telefono}
                     onChange={(e) => setConfig({...config, empresa: {...config.empresa, telefono: e.target.value}})}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                 </div>
                 <div>
@@ -649,7 +705,7 @@ function Configuracion() {
                     type="email"
                     value={config.empresa.email}
                     onChange={(e) => setConfig({...config, empresa: {...config.empresa, email: e.target.value}})}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -660,7 +716,7 @@ function Configuracion() {
                     type="text"
                     value={config.empresa.direccion}
                     onChange={(e) => setConfig({...config, empresa: {...config.empresa, direccion: e.target.value}})}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                 </div>
                 <div>
@@ -671,7 +727,7 @@ function Configuracion() {
                     type="text"
                     value={config.empresa.ciudad}
                     onChange={(e) => setConfig({...config, empresa: {...config.empresa, ciudad: e.target.value}})}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                 </div>
                 <div>
@@ -682,7 +738,7 @@ function Configuracion() {
                     type="text"
                     value={config.empresa.cp}
                     onChange={(e) => setConfig({...config, empresa: {...config.empresa, cp: e.target.value}})}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                 </div>
                 <div>
@@ -693,7 +749,7 @@ function Configuracion() {
                     type="text"
                     value={config.empresa.web}
                     onChange={(e) => setConfig({...config, empresa: {...config.empresa, web: e.target.value}})}
-                    className="input-field"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -706,7 +762,7 @@ function Configuracion() {
                       type="text"
                       value={config.empresa.cuentaBancaria}
                       onChange={(e) => setConfig({...config, empresa: {...config.empresa, cuentaBancaria: e.target.value}})}
-                      className="input-field pl-10"
+                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                       placeholder="ES00 0000 0000 0000 0000 0000"
                     />
                   </div>
@@ -715,7 +771,7 @@ function Configuracion() {
                   </p>
                 </div>
                 
-                {/* Campo para cambiar contraseña */}
+                {/* Campo para cambiar contraseña - MEJORADO */}
                 <div className="md:col-span-2 border-t border-gray-200 pt-4 mt-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Contraseña de acceso a configuración
@@ -723,15 +779,46 @@ function Configuracion() {
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       value={configPassword}
                       onChange={(e) => setConfigPassword(e.target.value)}
-                      className="input-field pl-10"
-                      placeholder="Nueva contraseña (déjalo en blanco para mantener la actual)"
+                      className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      placeholder="••••••••"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Contraseña necesaria para acceder a esta página. Cámbiala por una segura.
+                  <div className="mt-2 flex items-center space-x-2">
+                    <div className="text-xs text-gray-500">
+                      {!configPassword ? (
+                        <span className="text-amber-600">⚠️ Actualmente no hay contraseña configurada</span>
+                      ) : (
+                        <span>🔒 Contraseña configurada actualmente</span>
+                      )}
+                    </div>
+                    {configPassword && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('¿Estás seguro de que quieres eliminar la contraseña?')) {
+                            setConfigPassword('');
+                            showNotification('Contraseña eliminada. La configuración quedará sin protección.', 'warning');
+                          }
+                        }}
+                        className="text-xs text-red-600 hover:text-red-700 underline"
+                      >
+                        Eliminar contraseña
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    💡 Deja el campo vacío para mantener la contraseña actual.
+                    {!configPassword && <span> Establece una contraseña para proteger esta página.</span>}
                   </p>
                 </div>
               </div>
@@ -742,7 +829,7 @@ function Configuracion() {
           {activeTab === 'impuestos' && (
             <div className="space-y-6 max-w-md">
               <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-                <Percent className="w-5 h-5 mr-2 text-primary-500" />
+                <Percent className="w-5 h-5 mr-2 text-gray-600" />
                 Configuración de impuestos
               </h3>
               <div>
@@ -754,7 +841,7 @@ function Configuracion() {
                     type="number"
                     value={config.impuestos.iva}
                     onChange={(e) => setConfig({...config, impuestos: {...config.impuestos, iva: parseFloat(e.target.value) || 0}})}
-                    className="input-field w-32"
+                    className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                     step="0.1"
                   />
                   <span className="text-gray-500">%</span>
@@ -772,7 +859,7 @@ function Configuracion() {
                     type="number"
                     value={config.impuestos.irpf}
                     onChange={(e) => setConfig({...config, impuestos: {...config.impuestos, irpf: parseFloat(e.target.value) || 0}})}
-                    className="input-field w-32"
+                    className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                     step="0.1"
                   />
                   <span className="text-gray-500">%</span>
@@ -788,7 +875,7 @@ function Configuracion() {
           {activeTab === 'notificaciones' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-                <Mail className="w-5 h-5 mr-2 text-primary-500" />
+                <Mail className="w-5 h-5 mr-2 text-gray-600" />
                 Notificaciones
               </h3>
               <div className="space-y-3">
@@ -800,7 +887,7 @@ function Configuracion() {
                       ...config,
                       notificaciones: {...config.notificaciones, email_presupuesto: e.target.checked}
                     })}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    className="rounded border-gray-300 text-gray-900 focus:ring-gray-500"
                   />
                   <span className="text-sm text-gray-700">Enviar email cuando se genere un presupuesto</span>
                 </label>
@@ -812,7 +899,7 @@ function Configuracion() {
                       ...config,
                       notificaciones: {...config.notificaciones, email_factura: e.target.checked}
                     })}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    className="rounded border-gray-300 text-gray-900 focus:ring-gray-500"
                   />
                   <span className="text-sm text-gray-700">Enviar email cuando se genere una factura</span>
                 </label>
@@ -824,7 +911,7 @@ function Configuracion() {
                       ...config,
                       notificaciones: {...config.notificaciones, email_recordatorio: e.target.checked}
                     })}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    className="rounded border-gray-300 text-gray-900 focus:ring-gray-500"
                   />
                   <span className="text-sm text-gray-700">Enviar recordatorios de recogida</span>
                 </label>
@@ -836,7 +923,7 @@ function Configuracion() {
           {activeTab === 'datos' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-                <Database className="w-5 h-5 mr-2 text-primary-500" />
+                <Database className="w-5 h-5 mr-2 text-gray-600" />
                 Gestión de datos
               </h3>
               
@@ -910,14 +997,14 @@ function Configuracion() {
                     </div>
                   </div>
                   
-                  <div className="border border-gray-200 rounded-lg p-4 bg-primary-50">
-                    <Download className="w-8 h-8 text-primary-600 mb-2" />
+                  <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <Download className="w-8 h-8 text-gray-600 mb-2" />
                     <h5 className="font-medium text-gray-800">Backup completo</h5>
                     <p className="text-xs text-gray-500 mt-1">Exportar todos los datos en un solo archivo</p>
                     <button
                       onClick={exportTodo}
                       disabled={exporting}
-                      className="w-full mt-3 px-3 py-1.5 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 transition-colors disabled:opacity-50"
+                      className="w-full mt-3 px-3 py-1.5 bg-gray-800 text-white rounded-lg text-sm hover:bg-gray-700 transition-colors disabled:opacity-50"
                     >
                       {exporting ? 'Exportando...' : 'Exportar todo'}
                     </button>
@@ -969,10 +1056,21 @@ function Configuracion() {
                     Elimina todos los datos de prueba del sistema. Esta acción no se puede deshacer.
                   </p>
                   <button
-                    className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
-                    onClick={() => alert('Funcionalidad en desarrollo')}
+                    onClick={borrarDatosPrueba}
+                    disabled={loading}
+                    className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center space-x-2"
                   >
-                    Borrar datos de prueba
+                    {loading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Borrando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        <span>Borrar datos de prueba</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

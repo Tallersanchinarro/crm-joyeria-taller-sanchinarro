@@ -7,10 +7,11 @@ import {
   Save,
   X,
   FolderTree,
-  AlertTriangle,
-  ArrowLeft,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Search,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
@@ -19,13 +20,20 @@ function AdminFamiliasFallos() {
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editandoId, setEditandoId] = useState(null);
+  const [editandoData, setEditandoData] = useState({});
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   // Estado para nueva familia
   const [nuevaFamilia, setNuevaFamilia] = useState({ nombre: '', descripcion: '', orden: 0 });
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [creando, setCreando] = useState(false);
 
   useEffect(() => {
     cargarFamilias();
@@ -34,18 +42,6 @@ function AdminFamiliasFallos() {
   const cargarFamilias = async () => {
     try {
       setLoading(true);
-      
-      // Verificar si la tabla existe, si no, crearla
-      const { error: checkError } = await supabase
-        .from('familias_fallos')
-        .select('id')
-        .limit(1);
-
-      if (checkError && checkError.code === '42P01') {
-        // La tabla no existe, la creamos
-        await crearTablaFamiliasFallos();
-      }
-
       const { data, error } = await supabase
         .from('familias_fallos')
         .select('*')
@@ -61,37 +57,45 @@ function AdminFamiliasFallos() {
     }
   };
 
-  const crearTablaFamiliasFallos = async () => {
-    const { error } = await supabase.rpc('crear_tabla_familias_fallos', {});
-    
-    if (error) {
-      // Si no podemos crear con RPC, mostramos el SQL
-      alert('Ejecuta este SQL en Supabase:\n\n' +
-        'CREATE TABLE familias_fallos (\n' +
-        '  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n' +
-        '  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n' +
-        '  nombre TEXT NOT NULL,\n' +
-        '  descripcion TEXT,\n' +
-        '  orden INTEGER DEFAULT 0,\n' +
-        '  activo BOOLEAN DEFAULT true\n' +
-        ');\n\n' +
-        '-- Insertar familias por defecto\n' +
-        "INSERT INTO familias_fallos (nombre, orden) VALUES\n" +
-        "('Engarces', 1),\n" +
-        "('Soldaduras', 2),\n" +
-        "('Cierres', 3),\n" +
-        "('Acabados', 4),\n" +
-        "('Estructurales', 5),\n" +
-        "('Limpieza', 6);"
-      );
-    }
+  // Verificar duplicados
+  const esDuplicado = (nombre, excludeId = null) => {
+    return familias.some(f => 
+      f.nombre?.toLowerCase() === nombre.toLowerCase() &&
+      f.id !== excludeId
+    );
   };
+
+  // Filtrar familias por búsqueda
+  const familiasFiltradas = familias.filter(familia =>
+    familia.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (familia.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  // Paginación
+  const totalPages = Math.ceil(familiasFiltradas.length / itemsPerPage);
+  const familiasPaginadas = familiasFiltradas.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Resetear página cuando cambia la búsqueda
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const crearFamilia = async () => {
     if (!nuevaFamilia.nombre) {
       setError('El nombre es obligatorio');
       return;
     }
+
+    if (esDuplicado(nuevaFamilia.nombre)) {
+      setError('Ya existe una familia con este nombre');
+      return;
+    }
+
+    setCreando(true);
+    setError(null);
 
     try {
       const { data, error } = await supabase
@@ -115,14 +119,33 @@ function AdminFamiliasFallos() {
     } catch (error) {
       console.error('Error creando familia:', error);
       setError(error.message);
+    } finally {
+      setCreando(false);
     }
   };
 
-  const actualizarFamilia = async (id, datos) => {
+  const actualizarFamilia = async (id) => {
+    const datos = editandoData[id];
+    if (!datos) return;
+
+    if (!datos.nombre) {
+      setError('El nombre es obligatorio');
+      return;
+    }
+
+    if (esDuplicado(datos.nombre, id)) {
+      setError('Ya existe una familia con este nombre');
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('familias_fallos')
-        .update(datos)
+        .update({
+          nombre: datos.nombre,
+          descripcion: datos.descripcion,
+          orden: datos.orden
+        })
         .eq('id', id)
         .select()
         .single();
@@ -131,6 +154,7 @@ function AdminFamiliasFallos() {
 
       setFamilias(familias.map(f => f.id === id ? data : f).sort((a, b) => a.orden - b.orden));
       setEditandoId(null);
+      setEditandoData({});
       setSuccessMessage('Familia actualizada');
       setShowSuccessMessage(true);
       setTimeout(() => setShowSuccessMessage(false), 3000);
@@ -140,7 +164,7 @@ function AdminFamiliasFallos() {
     }
   };
 
-  const eliminarFamilia = async (id) => {
+  const eliminarFamilia = async (id, nombre) => {
     // Verificar si tiene fallos asociados
     const { data: fallos, error: checkError } = await supabase
       .from('fallos_predefinidos')
@@ -158,7 +182,7 @@ function AdminFamiliasFallos() {
       return;
     }
 
-    if (!window.confirm('¿Estás seguro de eliminar esta familia?')) return;
+    if (!window.confirm(`¿Estás seguro de eliminar la familia "${nombre}"?`)) return;
 
     try {
       const { error } = await supabase
@@ -178,16 +202,37 @@ function AdminFamiliasFallos() {
     }
   };
 
+  const iniciarEdicion = (familia) => {
+    setEditandoId(familia.id);
+    setEditandoData({
+      [familia.id]: {
+        nombre: familia.nombre,
+        descripcion: familia.descripcion || '',
+        orden: familia.orden
+      }
+    });
+  };
+
+  const handleEditChange = (id, field, value) => {
+    setEditandoData(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: field === 'orden' ? parseInt(value) || 0 : value
+      }
+    }));
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Mensajes de éxito/error */}
       {showSuccessMessage && (
         <div className="fixed top-4 right-4 z-50 animate-slide-down">
@@ -199,65 +244,64 @@ function AdminFamiliasFallos() {
       )}
 
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg flex items-center">
-          <AlertCircle className="w-5 h-5 mr-2" />
-          {error}
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between">
+          <div className="flex items-center">
+            <AlertCircle className="w-5 h-5 mr-2" />
+            <span>{error}</span>
+          </div>
+          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">Familias de Fallos</h1>
-            <p className="text-sm text-gray-500">
-              Gestiona las categorías de fallos para reparaciones
-            </p>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Familias de Fallos</h1>
+          <p className="text-sm text-gray-500">
+            Gestiona las categorías de fallos para reparaciones
+          </p>
         </div>
         <button
           onClick={() => setMostrarForm(true)}
-          className="btn-primary flex items-center space-x-2"
+          className="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2"
         >
           <Plus className="w-4 h-4" />
           <span>Nueva familia</span>
         </button>
       </div>
 
+      {/* Buscador */}
+      <div className="bg-white rounded-xl shadow-sm p-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <input
+            type="text"
+            placeholder="Buscar familias por nombre o descripción..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+          />
+        </div>
+      </div>
+
       {/* Formulario nueva familia */}
       {mostrarForm && (
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-primary-200">
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
           <h3 className="font-medium text-gray-800 mb-4">Nueva familia de fallos</h3>
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre
+                Nombre *
               </label>
               <input
                 type="text"
                 value={nuevaFamilia.nombre}
                 onChange={(e) => setNuevaFamilia({...nuevaFamilia, nombre: e.target.value})}
-                className="input-field"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                 placeholder="Ej: Engarces, Soldaduras, Cierres..."
                 autoFocus
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Descripción (opcional)
-              </label>
-              <textarea
-                value={nuevaFamilia.descripcion}
-                onChange={(e) => setNuevaFamilia({...nuevaFamilia, descripcion: e.target.value})}
-                className="input-field"
-                rows="2"
-                placeholder="Descripción de la familia de fallos"
               />
             </div>
             <div>
@@ -268,188 +312,190 @@ function AdminFamiliasFallos() {
                 type="number"
                 value={nuevaFamilia.orden}
                 onChange={(e) => setNuevaFamilia({...nuevaFamilia, orden: parseInt(e.target.value) || 0})}
-                className="input-field"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                 placeholder="0"
+              />
+              <p className="text-xs text-gray-500 mt-1">Define el orden de aparición (menor número = más arriba)</p>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Descripción (opcional)
+              </label>
+              <textarea
+                value={nuevaFamilia.descripcion}
+                onChange={(e) => setNuevaFamilia({...nuevaFamilia, descripcion: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
+                rows="2"
+                placeholder="Descripción de la familia de fallos"
               />
             </div>
           </div>
           <div className="flex justify-end space-x-2 mt-4">
             <button
               onClick={() => setMostrarForm(false)}
-              className="btn-secondary"
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancelar
             </button>
             <button
               onClick={crearFamilia}
-              className="btn-primary flex items-center space-x-2"
+              disabled={creando}
+              className="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2 disabled:opacity-50"
             >
-              <Save className="w-4 h-4" />
+              {creando ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
               <span>Guardar familia</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Lista de familias */}
+      {/* Tabla de familias */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        {familias.length === 0 ? (
-          <div className="text-center py-12">
-            <FolderTree className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">No hay familias de fallos creadas</p>
-            <button
-              onClick={() => setMostrarForm(true)}
-              className="mt-2 text-primary-600 hover:text-primary-700 text-sm font-medium"
-            >
-              + Crear primera familia
-            </button>
-          </div>
-        ) : (
+        <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Orden</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descripción</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Orden</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {familias.map((familia) => (
-                <tr key={familia.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    {editandoId === familia.id ? (
-                      <input
-                        type="number"
-                        defaultValue={familia.orden}
-                        className="input-field text-sm py-1 w-20"
-                        id={`orden-${familia.id}`}
-                      />
-                    ) : (
-                      <span className="text-sm text-gray-600">{familia.orden}</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {editandoId === familia.id ? (
-                      <input
-                        type="text"
-                        defaultValue={familia.nombre}
-                        className="input-field text-sm py-1"
-                        id={`nombre-${familia.id}`}
-                      />
-                    ) : (
-                      <span className="font-medium text-gray-900">{familia.nombre}</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {editandoId === familia.id ? (
-                      <input
-                        type="text"
-                        defaultValue={familia.descripcion || ''}
-                        className="input-field text-sm py-1"
-                        id={`desc-${familia.id}`}
-                        placeholder="Descripción"
-                      />
-                    ) : (
-                      <span className="text-sm text-gray-500">{familia.descripcion}</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {editandoId === familia.id ? (
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => {
-                            const nombre = document.getElementById(`nombre-${familia.id}`).value;
-                            const desc = document.getElementById(`desc-${familia.id}`).value;
-                            const orden = parseInt(document.getElementById(`orden-${familia.id}`).value) || 0;
-                            actualizarFamilia(familia.id, { nombre, descripcion: desc, orden });
-                          }}
-                          className="p-1 text-green-600 hover:bg-green-50 rounded"
-                          title="Guardar"
-                        >
-                          <Save className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setEditandoId(null)}
-                          className="p-1 text-red-600 hover:bg-red-50 rounded"
-                          title="Cancelar"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => setEditandoId(familia.id)}
-                          className="p-1 hover:bg-gray-100 rounded"
-                          title="Editar"
-                        >
-                          <Edit className="w-4 h-4 text-gray-600" />
-                        </button>
-                        <button
-                          onClick={() => eliminarFamilia(familia.id)}
-                          className="p-1 hover:bg-red-100 rounded"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4 text-red-600" />
-                        </button>
-                      </div>
-                    )}
+              {familiasPaginadas.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="px-6 py-12 text-center">
+                    <FolderTree className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500">No hay familias de fallos registradas</p>
+                    <button
+                      onClick={() => setMostrarForm(true)}
+                      className="mt-2 text-gray-600 hover:text-gray-800 text-sm font-medium"
+                    >
+                      + Añadir primera familia
+                    </button>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                familiasPaginadas.map((familia) => (
+                  <tr key={familia.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4">
+                      {editandoId === familia.id ? (
+                        <input
+                          type="number"
+                          value={editandoData[familia.id]?.orden || 0}
+                          onChange={(e) => handleEditChange(familia.id, 'orden', e.target.value)}
+                          className="w-20 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
+                        />
+                      ) : (
+                        <span className="text-sm text-gray-600">{familia.orden}</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {editandoId === familia.id ? (
+                        <input
+                          type="text"
+                          value={editandoData[familia.id]?.nombre || ''}
+                          onChange={(e) => handleEditChange(familia.id, 'nombre', e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
+                        />
+                      ) : (
+                        <span className="font-medium text-gray-900">{familia.nombre}</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {editandoId === familia.id ? (
+                        <input
+                          type="text"
+                          value={editandoData[familia.id]?.descripcion || ''}
+                          onChange={(e) => handleEditChange(familia.id, 'descripcion', e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
+                          placeholder="Descripción"
+                        />
+                      ) : (
+                        <span className="text-gray-500 text-sm">{familia.descripcion || '-'}</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center space-x-2">
+                        {editandoId === familia.id ? (
+                          <>
+                            <button
+                              onClick={() => actualizarFamilia(familia.id)}
+                              className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors"
+                              title="Guardar"
+                            >
+                              <Save className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditandoId(null);
+                                setEditandoData({});
+                              }}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Cancelar"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => iniciarEdicion(familia)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Editar"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => eliminarFamilia(familia.id, familia.nombre)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
+        </div>
+        
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, familiasFiltradas.length)} de {familiasFiltradas.length} familias
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-sm text-gray-600">
+                Página {currentPage} de {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         )}
       </div>
-
-      {/* SQL de ejemplo si la tabla no existe */}
-      {familias.length === 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <h3 className="font-medium text-yellow-800 mb-2 flex items-center">
-            <AlertTriangle className="w-4 h-4 mr-2" />
-            Tabla no encontrada
-          </h3>
-          <p className="text-sm text-yellow-700 mb-3">
-            Ejecuta este SQL en Supabase para crear la tabla:
-          </p>
-          <pre className="bg-gray-800 text-gray-100 p-3 rounded-lg text-xs overflow-x-auto">
-{`CREATE TABLE familias_fallos (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  nombre TEXT NOT NULL,
-  descripcion TEXT,
-  orden INTEGER DEFAULT 0,
-  activo BOOLEAN DEFAULT true
-);
-
--- Insertar familias por defecto
-INSERT INTO familias_fallos (nombre, orden) VALUES
-('Engarces', 1),
-('Soldaduras', 2),
-('Cierres', 3),
-('Acabados', 4),
-('Estructurales', 5),
-('Limpieza', 6);`}
-          </pre>
-        </div>
-      )}
-
-      <style jsx>{`
-        @keyframes slide-down {
-          from {
-            transform: translateY(-100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        .animate-slide-down {
-          animation: slide-down 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }

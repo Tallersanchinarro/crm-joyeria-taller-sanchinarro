@@ -33,9 +33,29 @@ function Header() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [logoUrl, setLogoUrl] = useState(null);
   const notificationRef = useRef(null);
   const userMenuRef = useRef(null);
   const searchRef = useRef(null);
+
+  // Cargar logo desde Supabase
+  useEffect(() => {
+    const loadLogo = async () => {
+      try {
+        const { data: config, error } = await supabase
+          .from('configuracion')
+          .select('logo_url')
+          .single();
+
+        if (!error && config?.logo_url) {
+          setLogoUrl(config.logo_url);
+        }
+      } catch (error) {
+        console.log('No se pudo cargar el logo');
+      }
+    };
+    loadLogo();
+  }, []);
 
   // Cerrar menús al hacer clic fuera
   useEffect(() => {
@@ -132,7 +152,7 @@ function Header() {
   const getNotificationIcon = (type) => {
     if (type === 'success') return <CheckCircle className="w-4 h-4 text-green-500" />;
     if (type === 'error') return <XCircle className="w-4 h-4 text-red-500" />;
-    return <Bell className="w-4 h-4 text-primary-500" />;
+    return <Bell className="w-4 h-4 text-gray-500" />;
   };
 
   const formatNotificationDate = (dateString) => {
@@ -156,54 +176,77 @@ function Header() {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
       <div className="px-4 md:px-6 py-3 flex items-center justify-between">
-        {/* Buscador */}
-        <div className="flex-1 max-w-md relative" ref={searchRef}>
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Buscar órdenes, clientes..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
+        {/* Logo + Buscador */}
+        <div className="flex items-center flex-1 max-w-2xl">
+          {/* Logo - Nueva posición a la izquierda */}
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center space-x-2 mr-4 hover:opacity-80 transition-opacity"
+          >
+            {logoUrl ? (
+              <img 
+                src={logoUrl} 
+                alt="Logo" 
+                className="h-6 w-auto object-contain"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Gem className="w-8 h-8 text-gray-800" />
+                <span className="text-xl font-bold tracking-tight text-gray-800 hidden sm:inline">TALLER</span>
+              </div>
             )}
-          </form>
+          </button>
 
-          {/* Resultados de búsqueda */}
-          {showSearchResults && searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-50">
-              {searchResults.map((result, index) => {
-                const Icon = result.icon;
-                return (
-                  <button
-                    key={`${result.type}-${result.id}`}
-                    onClick={() => handleResultClick(result)}
-                    className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left border-b border-gray-100 last:border-0"
-                  >
-                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                      <Icon className="w-4 h-4 text-gray-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-800">{result.title}</p>
-                      <p className="text-xs text-gray-500">{result.subtitle}</p>
-                    </div>
-                    <span className="text-xs text-gray-400 capitalize">{result.type}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {/* Buscador */}
+          <div className="relative flex-1 max-w-md" ref={searchRef}>
+            <form onSubmit={handleSearch} className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Buscar órdenes, clientes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:bg-white transition-all"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </form>
+
+            {/* Resultados de búsqueda */}
+            {showSearchResults && searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-50">
+                {searchResults.map((result, index) => {
+                  const Icon = result.icon;
+                  return (
+                    <button
+                      key={`${result.type}-${result.id}`}
+                      onClick={() => handleResultClick(result)}
+                      className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left border-b border-gray-100 last:border-0"
+                    >
+                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                        <Icon className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-800">{result.title}</p>
+                        <p className="text-xs text-gray-500">{result.subtitle}</p>
+                      </div>
+                      <span className="text-xs text-gray-400 capitalize">{result.type}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Acciones derecha */}
@@ -211,7 +254,7 @@ function Header() {
           {/* Botón Nueva Recepción */}
           <button
             onClick={handleNewReception}
-            className="flex items-center space-x-2 px-3 py-2 btn-negro text-white rounded-lg hover:bg-primary-700 transition-colors"
+            className="flex items-center space-x-2 px-3 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
             title="Nueva recepción"
           >
             <Plus className="w-4 h-4" />
@@ -240,7 +283,7 @@ function Header() {
                   {unreadCount > 0 && (
                     <button
                       onClick={markAllAsRead}
-                      className="text-xs text-primary-600 hover:text-primary-700"
+                      className="text-xs text-gray-600 hover:text-gray-800"
                     >
                       Marcar todas
                     </button>
@@ -273,7 +316,7 @@ function Header() {
                             </p>
                           </div>
                           {!notif.read && (
-                            <div className="w-2 h-2 bg-primary-500 rounded-full flex-shrink-0 mt-1"></div>
+                            <div className="w-2 h-2 bg-gray-500 rounded-full flex-shrink-0 mt-1"></div>
                           )}
                         </div>
                       </button>
@@ -287,7 +330,7 @@ function Header() {
                         navigate('/notificaciones');
                         setShowNotifications(false);
                       }}
-                      className="w-full text-center text-xs text-gray-500 hover:text-primary-600 py-1"
+                      className="w-full text-center text-xs text-gray-500 hover:text-gray-700 py-1"
                     >
                       Ver todas las notificaciones
                     </button>
@@ -303,7 +346,7 @@ function Header() {
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center space-x-2 p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <div className="w-8 h-8 btn-negro rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center">
                 <span className="text-sm font-medium text-white">{getUserInitials()}</span>
               </div>
               <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />

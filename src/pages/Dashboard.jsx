@@ -47,35 +47,35 @@ function Dashboard() {
     {
       icon: Package,
       label: 'Órdenes activas',
-      value: stats.activeOrders,
+      value: stats.activeOrders ?? 0,
       color: 'blue'
     },
     {
       icon: TrendingUp,
       label: 'Ingresos mes',
-      value: `€${stats.monthlyRevenue}`,
+      value: `€${stats.monthlyRevenue ?? 0}`,
       color: 'green'
     },
     {
       icon: Users,
       label: 'Clientes nuevos',
-      value: stats.newClients,
+      value: stats.newClients ?? 0,
       color: 'purple'
     },
     {
       icon: CheckCircle,
       label: 'Listas para entregar',
-      value: stats.readyForPickup,
+      value: stats.readyForPickup ?? 0,
       color: 'teal'
     }
   ];
 
   // Resumen rápido
   const quickStats = [
-    { label: 'En análisis', value: stats.inAnalysis, color: 'blue' },
-    { label: 'Presupuestos', value: stats.pendingBudget, color: 'amber' },
-    { label: 'En reparación', value: stats.inRepair, color: 'orange' },
-    { label: 'Para entregar', value: stats.readyForPickup, color: 'green' }
+    { label: 'En análisis', value: stats.inAnalysis ?? 0, color: 'blue' },
+    { label: 'Presupuestos', value: stats.pendingBudget ?? 0, color: 'amber' },
+    { label: 'En reparación', value: stats.inRepair ?? 0, color: 'orange' },
+    { label: 'Para entregar', value: stats.readyForPickup ?? 0, color: 'green' }
   ];
 
   // Alertas principales
@@ -141,7 +141,7 @@ function Dashboard() {
         
         <button
           onClick={handleNewReception}
-          className="btn-primary flex items-center space-x-2 px-4 py-2"
+          className="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2"
         >
           <Plus className="w-5 h-5" />
           <span>Nueva recepción</span>
@@ -209,7 +209,7 @@ function Dashboard() {
               <h3 className="font-medium text-gray-700">Últimas recepciones</h3>
               <button
                 onClick={() => navigate('/reparaciones-activas')}
-                className="text-sm text-primary-600 hover:text-primary-700"
+                className="text-sm text-gray-600 hover:text-gray-800"
               >
                 Ver todas
               </button>
@@ -270,7 +270,7 @@ function Dashboard() {
 
           <button
             onClick={() => navigate('/clientes')}
-            className="w-full mt-3 text-center text-sm text-primary-600 hover:text-primary-700"
+            className="w-full mt-3 text-center text-sm text-gray-600 hover:text-gray-800"
           >
             Ver todos →
           </button>
@@ -305,13 +305,15 @@ function Dashboard() {
             </div>
             <div className="p-4 space-y-3">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
-                  <User className="w-6 h-6 text-primary-600" />
+                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                  <User className="w-6 h-6 text-gray-600" />
                 </div>
                 <div>
                   <p className="font-medium">{selectedClient.name}</p>
                   <p className="text-sm text-gray-500">
-                    Cliente desde {new Date(selectedClient.created_at).toLocaleDateString()}
+                    Cliente desde {selectedClient.created_at 
+                      ? new Date(selectedClient.created_at).toLocaleDateString() 
+                      : 'fecha no disponible'}
                   </p>
                 </div>
               </div>
@@ -336,7 +338,7 @@ function Dashboard() {
                 </div>
                 <div className="bg-gray-50 p-2 rounded text-center">
                   <p className="text-xs text-gray-500">Activas</p>
-                  <p className="text-lg font-bold text-primary-600">
+                  <p className="text-lg font-bold text-gray-800">
                     {orders.filter(o => o.client_id === selectedClient.id && 
                       o.status !== 'Entregado' && 
                       o.status !== 'Rechazado').length}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -22,7 +22,9 @@ import {
   MoreVertical,
   Download,
   Filter,
-  CreditCard
+  CreditCard,
+  LayoutGrid,
+  Table
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -42,6 +44,10 @@ function Clientes() {
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState('asc');
   const [filterActive, setFilterActive] = useState(false);
+  
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const [formData, setFormData] = useState({
     name: '',
@@ -52,12 +58,44 @@ function Clientes() {
     notes: ''
   });
 
-  // Obtener órdenes de un cliente
+  // ============================================
+  // FUNCIONES DE VALIDACIÓN
+  // ============================================
+  
+  const validateNIF = (nif) => {
+    if (!nif) return true;
+    // Formato español: 12345678A, X1234567A, etc.
+    const nifRegex = /^[0-9]{8}[A-Z]$|^[XYZ][0-9]{7}[A-Z]$|^[A-HJ-NP-SUVW][0-9]{7}[0-9A-J]$/i;
+    return nifRegex.test(nif.toUpperCase());
+  };
+
+  const validateEmail = (email) => {
+    if (!email) return true;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone) => {
+    const digits = phone.replace(/\D/g, '');
+    return digits.length >= 6;
+  };
+
+  const checkDuplicate = (field, value, excludeId = null) => {
+    if (!value) return false;
+    return clients.some(c => 
+      c[field]?.toLowerCase() === value.toLowerCase() && 
+      c.id !== excludeId
+    );
+  };
+
+  // ============================================
+  // FUNCIONES DE OBTENCIÓN DE DATOS
+  // ============================================
+
   const getClientOrders = useCallback((clientId) => {
     return orders.filter(o => o.client_id === clientId);
   }, [orders]);
 
-  // Obtener órdenes activas
   const getActiveOrders = useCallback((clientId) => {
     return orders.filter(o => 
       o.client_id === clientId && 
@@ -66,7 +104,6 @@ function Clientes() {
     ).length;
   }, [orders]);
 
-  // Obtener última orden
   const getLastOrderDate = useCallback((clientId) => {
     const clientOrders = orders.filter(o => o.client_id === clientId);
     if (clientOrders.length === 0) return null;
@@ -76,7 +113,10 @@ function Clientes() {
     return lastOrder.created_at;
   }, [orders]);
 
-  // Filtrar y ordenar clientes
+  // ============================================
+  // FILTRADO, ORDENACIÓN Y PAGINACIÓN
+  // ============================================
+
   const filteredClients = useMemo(() => {
     let result = clients.filter(client =>
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -119,10 +159,63 @@ function Clientes() {
     return result;
   }, [clients, searchTerm, filterActive, sortBy, sortOrder, getActiveOrders, getClientOrders, getLastOrderDate]);
 
-  // Guardar cliente
+  // Paginación
+  const paginatedClients = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredClients.slice(start, start + itemsPerPage);
+  }, [filteredClients, currentPage]);
+
+  const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
+
+  // Resetear página cuando cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterActive, sortBy, sortOrder]);
+
+  // ============================================
+  // CRUD OPERACIONES
+  // ============================================
+
   const handleSaveClient = async () => {
+    // Validaciones básicas
     if (!formData.name || !formData.phone) {
       setError('Nombre y teléfono son obligatorios');
+      return;
+    }
+
+    // Validar teléfono
+    if (!validatePhone(formData.phone)) {
+      setError('El teléfono debe tener al menos 6 dígitos');
+      return;
+    }
+
+    // Validar email
+    if (formData.email && !validateEmail(formData.email)) {
+      setError('El email no tiene un formato válido');
+      return;
+    }
+
+    // Validar NIF (si se proporciona)
+    if (formData.nif && !validateNIF(formData.nif)) {
+      setError('El NIF/CIF no tiene un formato válido (ej: 12345678A)');
+      return;
+    }
+
+    // Verificar duplicados por teléfono
+    if (checkDuplicate('phone', formData.phone, isEditing ? selectedClient?.id : null)) {
+      setError('Ya existe un cliente con este número de teléfono');
+      return;
+    }
+
+    // Verificar duplicados por email
+    if (formData.email && checkDuplicate('email', formData.email, isEditing ? selectedClient?.id : null)) {
+      setError('Ya existe un cliente con este email');
+      return;
+    }
+
+    // Verificar duplicados por NIF
+    if (formData.nif && checkDuplicate('nif', formData.nif, isEditing ? selectedClient?.id : null)) {
+      setError('Ya existe un cliente con este NIF/CIF');
       return;
     }
 
@@ -147,7 +240,6 @@ function Clientes() {
     }
   };
 
-  // Eliminar cliente
   const handleDeleteClient = async () => {
     if (!deleteConfirm) return;
     const { id, name } = deleteConfirm;
@@ -171,7 +263,6 @@ function Clientes() {
     }
   };
 
-  // Abrir modal para editar
   const handleEditClient = (client) => {
     setSelectedClient(client);
     setFormData({
@@ -186,7 +277,6 @@ function Clientes() {
     setIsModalOpen(true);
   };
 
-  // Abrir modal para nuevo
   const handleNewClient = () => {
     resetForm();
     setIsEditing(false);
@@ -199,10 +289,13 @@ function Clientes() {
     setError(null);
   };
 
-  // Ver detalles del cliente
   const handleViewClient = (client) => {
     navigate(`/reparaciones-activas?cliente=${client.id}`);
   };
+
+  // ============================================
+  // RENDER
+  // ============================================
 
   return (
     <div className="space-y-6">
@@ -217,14 +310,18 @@ function Clientes() {
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')}
-            className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             title={viewMode === 'table' ? 'Vista de tarjetas' : 'Vista de tabla'}
           >
-            {viewMode === 'table' ? '📇' : '📋'}
+            {viewMode === 'table' ? (
+              <LayoutGrid className="w-4 h-4 text-gray-600" />
+            ) : (
+              <Table className="w-4 h-4 text-gray-600" />
+            )}
           </button>
           <button
             onClick={handleNewClient}
-            className="btn-primary flex items-center space-x-2"
+            className="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2"
             disabled={loading}
           >
             <Plus className="w-4 h-4" />
@@ -243,14 +340,14 @@ function Clientes() {
               placeholder="Buscar por nombre, NIF, teléfono o email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
             />
           </div>
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setFilterActive(!filterActive)}
-              className={`px-3 py-2 border rounded-lg flex items-center space-x-2 ${
-                filterActive ? 'bg-primary-50 border-primary-300 text-primary-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+              className={`px-3 py-2 border rounded-lg flex items-center space-x-2 transition-colors ${
+                filterActive ? 'bg-gray-100 border-gray-400 text-gray-800' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
               }`}
             >
               <Filter className="w-4 h-4" />
@@ -259,7 +356,7 @@ function Clientes() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
             >
               <option value="name">Ordenar por nombre</option>
               <option value="nif">Ordenar por NIF</option>
@@ -268,7 +365,7 @@ function Clientes() {
             </select>
             <button
               onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               {sortOrder === 'asc' ? '↑' : '↓'}
             </button>
@@ -284,7 +381,7 @@ function Clientes() {
             <p className="text-gray-500">No hay clientes que coincidan con la búsqueda</p>
             <button
               onClick={handleNewClient}
-              className="mt-2 text-primary-600 hover:text-primary-700 text-sm font-medium"
+              className="mt-2 text-gray-600 hover:text-gray-800 text-sm font-medium"
             >
               + Añadir nuevo cliente
             </button>
@@ -295,16 +392,16 @@ function Clientes() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">NIF/CIF</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contacto</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Órdenes</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Última actividad</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"></th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NIF/CIF</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contacto</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Órdenes</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Última actividad</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredClients.map((client) => {
+                {paginatedClients.map((client) => {
                   const clientOrders = getClientOrders(client.id);
                   const activeOrders = getActiveOrders(client.id);
                   const lastOrderDate = getLastOrderDate(client.id);
@@ -313,8 +410,8 @@ function Clientes() {
                     <tr key={client.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                            <Gem className="w-5 h-5 text-primary-600" />
+                          <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                            <Gem className="w-5 h-5 text-gray-600" />
                           </div>
                           <div>
                             <p className="font-medium text-gray-900">{client.name}</p>
@@ -360,14 +457,14 @@ function Clientes() {
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={() => handleViewClient(client)}
-                            className="p-1 hover:bg-gray-100 rounded"
+                            className="p-1 hover:bg-gray-100 rounded transition-colors"
                             title="Ver reparaciones"
                           >
                             <Package className="w-4 h-4 text-gray-600" />
                           </button>
                           <button
                             onClick={() => handleEditClient(client)}
-                            className="p-1 hover:bg-gray-100 rounded"
+                            className="p-1 hover:bg-gray-100 rounded transition-colors"
                             title="Editar"
                             disabled={loading}
                           >
@@ -375,7 +472,7 @@ function Clientes() {
                           </button>
                           <button
                             onClick={() => setDeleteConfirm({ id: client.id, name: client.name })}
-                            className="p-1 hover:bg-red-100 rounded"
+                            className="p-1 hover:bg-red-100 rounded transition-colors"
                             title="Eliminar"
                             disabled={loading || clientOrders.length > 0}
                           >
@@ -388,81 +485,139 @@ function Clientes() {
                 })}
               </tbody>
             </table>
+            
+            {/* Paginación - Tabla */}
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="text-sm text-gray-500">
+                  Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredClients.length)} de {filteredClients.length} clientes
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ←
+                  </button>
+                  <span className="text-sm text-gray-600">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           // Vista de tarjetas
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-            {filteredClients.map((client) => {
-              const clientOrders = getClientOrders(client.id);
-              const activeOrders = getActiveOrders(client.id);
-              const lastOrderDate = getLastOrderDate(client.id);
-              return (
-                <div key={client.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                        <Gem className="w-5 h-5 text-primary-600" />
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+              {paginatedClients.map((client) => {
+                const clientOrders = getClientOrders(client.id);
+                const activeOrders = getActiveOrders(client.id);
+                const lastOrderDate = getLastOrderDate(client.id);
+                return (
+                  <div key={client.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                          <Gem className="w-5 h-5 text-gray-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{client.name}</p>
+                          {client.nif && <p className="text-xs text-gray-500">NIF: {client.nif}</p>}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{client.name}</p>
-                        {client.nif && <p className="text-xs text-gray-500">NIF: {client.nif}</p>}
-                      </div>
+                      {activeOrders > 0 && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                          {activeOrders} activas
+                        </span>
+                      )}
                     </div>
-                    {activeOrders > 0 && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                        {activeOrders} activas
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-600 flex items-center mb-1">
-                    <Phone className="w-4 h-4 mr-2 text-gray-400" />
-                    {client.phone}
-                  </p>
-                  {client.email && (
-                    <p className="text-sm text-gray-600 flex items-center mb-2">
-                      <Mail className="w-4 h-4 mr-2 text-gray-400" />
-                      {client.email}
+                    <p className="text-sm text-gray-600 flex items-center mb-1">
+                      <Phone className="w-4 h-4 mr-2 text-gray-400" />
+                      {client.phone}
                     </p>
-                  )}
-                  <div className="flex justify-between items-center text-sm text-gray-500 mb-3">
-                    <span>Órdenes: {clientOrders.length}</span>
-                    <span>Última: {lastOrderDate ? new Date(lastOrderDate).toLocaleDateString() : 'Nunca'}</span>
+                    {client.email && (
+                      <p className="text-sm text-gray-600 flex items-center mb-2">
+                        <Mail className="w-4 h-4 mr-2 text-gray-400" />
+                        {client.email}
+                      </p>
+                    )}
+                    <div className="flex justify-between items-center text-sm text-gray-500 mb-3">
+                      <span>Órdenes: {clientOrders.length}</span>
+                      <span>Última: {lastOrderDate ? new Date(lastOrderDate).toLocaleDateString() : 'Nunca'}</span>
+                    </div>
+                    <div className="flex justify-end space-x-2 border-t pt-3">
+                      <button
+                        onClick={() => handleViewClient(client)}
+                        className="p-2 hover:bg-gray-100 rounded transition-colors"
+                        title="Ver reparaciones"
+                      >
+                        <Package className="w-4 h-4 text-gray-600" />
+                      </button>
+                      <button
+                        onClick={() => handleEditClient(client)}
+                        className="p-2 hover:bg-gray-100 rounded transition-colors"
+                        title="Editar"
+                      >
+                        <Edit className="w-4 h-4 text-gray-600" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm({ id: client.id, name: client.name })}
+                        className="p-2 hover:bg-red-100 rounded transition-colors"
+                        title="Eliminar"
+                        disabled={clientOrders.length > 0}
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex justify-end space-x-2 border-t pt-3">
-                    <button
-                      onClick={() => handleViewClient(client)}
-                      className="p-2 hover:bg-gray-100 rounded"
-                      title="Ver reparaciones"
-                    >
-                      <Package className="w-4 h-4 text-gray-600" />
-                    </button>
-                    <button
-                      onClick={() => handleEditClient(client)}
-                      className="p-2 hover:bg-gray-100 rounded"
-                      title="Editar"
-                    >
-                      <Edit className="w-4 h-4 text-gray-600" />
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirm({ id: client.id, name: client.name })}
-                      className="p-2 hover:bg-red-100 rounded"
-                      title="Eliminar"
-                      disabled={clientOrders.length > 0}
-                    >
-                      <Trash2 className="w-4 h-4 text-red-600" />
-                    </button>
-                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Paginación - Tarjetas */}
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="text-sm text-gray-500">
+                  Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredClients.length)} de {filteredClients.length} clientes
                 </div>
-              );
-            })}
-          </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ←
+                  </button>
+                  <span className="text-sm text-gray-600">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* Modal de confirmación de eliminación */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 animate-fade-in">
             <div className="flex items-center space-x-3 text-red-600 mb-4">
               <AlertCircle className="w-6 h-6" />
               <h3 className="text-lg font-semibold">Confirmar eliminación</h3>
@@ -473,13 +628,13 @@ function Clientes() {
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleDeleteClient}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                 disabled={loading}
               >
                 {loading ? 'Eliminando...' : 'Eliminar'}
@@ -492,7 +647,7 @@ function Clientes() {
       {/* Modal de cliente */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full">
+          <div className="bg-white rounded-xl max-w-md w-full animate-scale-up">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between">
               <h3 className="font-semibold text-lg">
                 {isEditing ? 'Editar cliente' : 'Nuevo cliente'}
@@ -502,7 +657,7 @@ function Clientes() {
                   setIsModalOpen(false);
                   resetForm();
                 }}
-                className="p-1 hover:bg-gray-100 rounded"
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -510,9 +665,9 @@ function Clientes() {
             
             <div className="p-4 space-y-4">
               {error && (
-                <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm flex items-center">
-                  <AlertCircle className="w-4 h-4 mr-2" />
-                  {error}
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                  <span>{error}</span>
                 </div>
               )}
 
@@ -524,7 +679,7 @@ function Clientes() {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                   placeholder="Ej: María García"
                   autoFocus
                 />
@@ -540,11 +695,11 @@ function Clientes() {
                     type="text"
                     value={formData.nif}
                     onChange={(e) => setFormData({...formData, nif: e.target.value})}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                     placeholder="12345678A / B12345678"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Obligatorio para emitir facturas</p>
+                <p className="text-xs text-gray-500 mt-1">Obligatorio para emitir facturas. Formato: 12345678A</p>
               </div>
 
               <div>
@@ -555,9 +710,10 @@ function Clientes() {
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                   placeholder="+34 612 345 678"
                 />
+                <p className="text-xs text-gray-500 mt-1">Mínimo 6 dígitos</p>
               </div>
 
               <div>
@@ -568,7 +724,7 @@ function Clientes() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                   placeholder="cliente@email.com"
                 />
               </div>
@@ -581,7 +737,7 @@ function Clientes() {
                   type="text"
                   value={formData.address}
                   onChange={(e) => setFormData({...formData, address: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                   placeholder="Calle, ciudad..."
                 />
               </div>
@@ -594,7 +750,7 @@ function Clientes() {
                   value={formData.notes}
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
                   rows="2"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent resize-none"
                   placeholder="Información adicional..."
                 />
               </div>
@@ -606,7 +762,7 @@ function Clientes() {
                   setIsModalOpen(false);
                   resetForm();
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 disabled={loading}
               >
                 Cancelar
@@ -614,7 +770,7 @@ function Clientes() {
               <button
                 onClick={handleSaveClient}
                 disabled={loading || !formData.name || !formData.phone}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center space-x-2 disabled:opacity-50"
+                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <>

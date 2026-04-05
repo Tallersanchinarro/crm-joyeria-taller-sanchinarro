@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Package,
   Search,
@@ -30,6 +30,7 @@ import { generateReceptionPDF } from '../utils/pdfGenerator';
 
 function ReparacionesActivas() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { orders, clients, updateOrder } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('todas');
@@ -47,6 +48,18 @@ function ReparacionesActivas() {
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+
+  // 👈 SINCRONIZAR FILTRO CON LA URL (CORRECCIÓN)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const estadoParam = params.get('estado');
+    
+    if (estadoParam === 'listo') {
+      setFilterStatus('Listo');
+    } else {
+      setFilterStatus('todas');
+    }
+  }, [location.search]);
 
   // Usar useMemo para que se recalcule cuando cambien orders o filtros
   const activeOrders = useMemo(() => 
@@ -229,7 +242,7 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
 
       if (newStatus === 'Listo') {
         updates.completed_at = new Date().toISOString();
-        updates.notified = false; // 👈 RESETEA EL FLAG DE AVISO PARA NUEVAS ÓRDENES LISTAS
+        updates.notified = false;
       }
 
       if (newStatus === 'Entregado') {
@@ -518,7 +531,6 @@ Taller de Relojería El Corte Inglés Sanchinarro`;
                   const isReady = order.status === 'Listo';
                   const isRejected = order.status === 'Rechazado';
                   
-                  // Determinar si mostrar el botón de rechazar (solo cuando el estado es "Presupuestado")
                   const showRejectButton = order.budget_status === 'pendiente' && order.budget && order.status === 'Presupuestado';
                   
                   return (

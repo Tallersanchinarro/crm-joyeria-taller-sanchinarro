@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Package, 
   Users, 
   Settings,
-  Gem,
   History,
   Clock,
   Menu,
@@ -21,6 +20,7 @@ import { supabase } from '../../lib/supabaseClient';
 
 function Sidebar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { orders } = useApp();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -54,34 +54,63 @@ function Sidebar() {
     }
   };
 
+  // Navegación con limpieza de query params
+  const handleNavigateTo = (path, clearParams = false) => {
+    if (clearParams) {
+      navigate(path);
+    } else {
+      navigate(path);
+    }
+    setIsMobileOpen(false);
+  };
+
+  const handleNavigateToActivas = () => {
+    navigate('/reparaciones-activas');
+    setIsMobileOpen(false);
+  };
+
+  const handleNavigateToTerminadas = () => {
+    navigate('/reparaciones-activas?estado=listo');
+    setIsMobileOpen(false);
+  };
+
   // Contadores para el menú
   const activeOrders = orders.filter(o => 
     o.status !== 'Entregado' && o.status !== 'Rechazado' && o.status !== 'Archivado'
   ).length;
   const readyOrders = orders.filter(o => o.status === 'Listo').length;
 
+  // Función para verificar si una ruta está activa (incluyendo query params)
+  const isRouteActive = (path, checkQueryParam = null) => {
+    if (checkQueryParam) {
+      const params = new URLSearchParams(location.search);
+      return location.pathname === path && params.get('estado') === checkQueryParam;
+    }
+    return location.pathname === path;
+  };
+
   // Menú principal
   const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: Package, label: 'Activas', path: '/reparaciones-activas', badge: activeOrders > 0 ? activeOrders : null },
-    { icon: Clock, label: 'Terminadas', path: '/reparaciones-activas?estado=listo', badge: readyOrders > 0 ? readyOrders : null },
-    { icon: History, label: 'Historial', path: '/historial' },
-    { icon: Users, label: 'Clientes', path: '/clientes' },
-    { icon: Receipt, label: 'Facturación', path: '/facturacion' },
-    { icon: Bell, label: 'Avisos Pendientes', path: '/avisos-pendientes', badge: avisosCount > 0 ? avisosCount : null }
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', action: null, checkQuery: null },
+    { icon: Package, label: 'Activas', path: '/reparaciones-activas', action: handleNavigateToActivas, checkQuery: null, badge: activeOrders > 0 ? activeOrders : null },
+    { icon: Clock, label: 'Terminadas', path: '/reparaciones-activas', action: handleNavigateToTerminadas, checkQuery: 'listo', badge: readyOrders > 0 ? readyOrders : null },
+    { icon: History, label: 'Historial', path: '/historial', action: null, checkQuery: null },
+    { icon: Users, label: 'Clientes', path: '/clientes', action: null, checkQuery: null },
+    { icon: Receipt, label: 'Facturación', path: '/facturacion', action: null, checkQuery: null },
+    { icon: Bell, label: 'Avisos Pendientes', path: '/avisos-pendientes', action: null, checkQuery: null, badge: avisosCount > 0 ? avisosCount : null }
   ];
 
   // Administración
   const adminItems = [
-    { icon: FolderTree, label: 'Familias Trabajos', path: '/admin-familias' },
-    { icon: ListTodo, label: 'Trabajos', path: '/admin-trabajos' },
-    { icon: FolderTree, label: 'Familias Fallos', path: '/admin-familias-fallos' },
-    { icon: AlertTriangle, label: 'Fallos', path: '/admin-fallos' }
+    { icon: FolderTree, label: 'Familias Trabajos', path: '/admin-familias', action: null },
+    { icon: ListTodo, label: 'Trabajos', path: '/admin-trabajos', action: null },
+    { icon: FolderTree, label: 'Familias Fallos', path: '/admin-familias-fallos', action: null },
+    { icon: AlertTriangle, label: 'Fallos', path: '/admin-fallos', action: null }
   ];
 
   // Configuración
   const bottomItems = [
-    { icon: Settings, label: 'Configuración', path: '/configuracion' }
+    { icon: Settings, label: 'Configuración', path: '/configuracion', action: null }
   ];
 
   return (
@@ -89,7 +118,7 @@ function Sidebar() {
       {/* Botón de menú para móvil */}
       <button
         onClick={() => setIsMobileOpen(true)}
-        className="lg:hidden fixed top-4 left-4 z-40 bg-white p-2 rounded-lg shadow-md border border-gray-300"
+        className="lg:hidden fixed top-4 left-4 z-50 bg-white p-2 rounded-lg shadow-md border border-gray-300"
       >
         <Menu className="w-5 h-5 text-gray-700" />
       </button>
@@ -99,44 +128,70 @@ function Sidebar() {
         <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setIsMobileOpen(false)} />
       )}
 
-      {/* Sidebar - Diseño blanco y negro */}
+      {/* Sidebar */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50
+          fixed top-0 left-0 z-50
           bg-white border-r border-gray-200
           shadow-xl transition-all duration-300 ease-in-out
           flex flex-col h-screen
+          top-16
           ${isExpanded ? 'w-64' : 'w-20'}
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => setIsExpanded(false)}
       >
-        {/* Logo - Versión simplificada sin imagen */}
-        <div className="flex items-center justify-center py-6 border-b border-gray-200">
-          {isExpanded ? (
-            <div className="flex items-center space-x-2">
-              <Gem className="w-8 h-8 text-gray-800" />
-              <span className="text-xl font-bold tracking-tight text-gray-800">TALLER</span>
-            </div>
-          ) : (
-            <Gem className="w-8 h-8 text-gray-800" />
-          )}
-        </div>
+        {/* Logo eliminado - Ahora está en el Header */}
 
-        {/* Navegación */}
+        {/* Navegación - con margin top para compensar la altura del header */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
           {menuItems.map((item) => {
             const Icon = item.icon;
+            const isActive = item.checkQuery 
+              ? isRouteActive(item.path, item.checkQuery)
+              : location.pathname === item.path;
+            
+            // Si tiene acción personalizada, usamos button, si no, NavLink
+            if (item.action) {
+              return (
+                <button
+                  key={item.label}
+                  onClick={item.action}
+                  className={`
+                    w-full flex items-center rounded-lg transition-all duration-200
+                    ${isExpanded ? 'justify-start space-x-3 px-3 py-2.5' : 'justify-center p-2.5'}
+                    ${isActive 
+                      ? 'bg-gray-900 text-white' 
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                    }
+                  `}
+                  title={!isExpanded ? item.label : ''}
+                >
+                  <div className="relative">
+                    <Icon className="w-5 h-5 flex-shrink-0" />
+                    {item.badge && (
+                      <span className="absolute -top-2 -right-2 min-w-5 h-5 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow-sm">
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
+                    )}
+                  </div>
+                  {isExpanded && (
+                    <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
+                  )}
+                </button>
+              );
+            }
+            
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
                 onClick={() => setIsMobileOpen(false)}
-                className={({ isActive }) => `
+                className={({ isActive: navIsActive }) => `
                   flex items-center rounded-lg transition-all duration-200
                   ${isExpanded ? 'justify-start space-x-3 px-3 py-2.5' : 'justify-center p-2.5'}
-                  ${isActive 
+                  ${(navIsActive || isActive) 
                     ? 'bg-gray-900 text-white' 
                     : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                   }
@@ -225,7 +280,7 @@ function Sidebar() {
           })}
         </nav>
 
-        {/* Footer con perfil y logout - Estilo blanco y negro */}
+        {/* Footer con perfil y logout */}
         <div className="border-t border-gray-200 p-3 bg-gray-50">
           {isExpanded ? (
             <div className="flex items-center justify-between">

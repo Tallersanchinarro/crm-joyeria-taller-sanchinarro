@@ -17,7 +17,7 @@ import Notificaciones from './pages/Notificaciones';
 import VistaPreviaPresupuesto from './pages/VistaPreviaPresupuesto';
 import Facturacion from './pages/Facturacion';
 import Configuracion from './pages/Configuracion';
-import AvisosPendientes from './pages/AvisosPendientes'; // 👈 IMPORTAR NUEVA PÁGINA
+import AvisosPendientes from './pages/AvisosPendientes';
 // Páginas de administración
 import AdminTrabajos from './pages/AdminTrabajos';
 import AdminFallos from './pages/AdminFallos';
@@ -49,18 +49,24 @@ function App() {
             path="/*"
             element={
               <ProtectedRoute>
-                <div className="min-h-screen bg-gray-50 flex">
-                  <Sidebar onExpandChange={setIsSidebarExpanded} />
-                  <div 
-                    className="flex-1 flex flex-col transition-all duration-300"
-                    style={{ 
-                      marginLeft: window.innerWidth >= 1024 
-                        ? (isSidebarExpanded ? '16rem' : '5rem')
-                        : '0'
-                    }}
-                  >
-                    <Header />
-                    <main className="flex-1 p-4 md:p-6 overflow-auto">
+                <div className="min-h-screen bg-gray-50">
+                  {/* Header FIJO arriba - SIN padding */}
+                  <Header />
+                  
+                  <div className="flex">
+                    {/* Sidebar - empieza debajo del header (top-16) */}
+                    <Sidebar onExpandChange={setIsSidebarExpanded} />
+                    
+                    {/* Contenido principal - con marginLeft y paddingTop */}
+                    <main 
+                      className="flex-1 p-4 md:p-6 overflow-auto transition-all duration-300"
+                      style={{ 
+                        marginLeft: window.innerWidth >= 1024 
+                          ? (isSidebarExpanded ? '16rem' : '5rem')
+                          : '0',
+                        marginTop: '4rem'
+                      }}
+                    >
                       <Routes>
                         {/* Rutas principales */}
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -74,7 +80,7 @@ function App() {
                         <Route path="/presupuesto/taller/:orderId" element={<VistaPreviaPresupuesto />} />
                         <Route path="/facturacion" element={<Facturacion />} />
                         <Route path="/configuracion" element={<Configuracion />} />
-                        <Route path="/avisos-pendientes" element={<AvisosPendientes />} /> {/* 👈 NUEVA RUTA */}
+                        <Route path="/avisos-pendientes" element={<AvisosPendientes />} />
 
                         {/* Rutas de administración */}
                         <Route path="/admin-trabajos" element={<AdminTrabajos />} />

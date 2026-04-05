@@ -19,9 +19,10 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { supabase } from '../lib/supabaseClient';
 import { generateReceptionPDF } from '../utils/pdfGenerator';
 
-// Códigos de país con banderas (usando flagcdn.com para mejor compatibilidad)
+// Códigos de país con banderas
 const phoneCodes = [
   { code: '+34', country: 'España', flag: 'https://flagcdn.com/es.svg', prefix: '+34' },
   { code: '+1', country: 'EE.UU./Canadá', flag: 'https://flagcdn.com/us.svg', prefix: '+1' },
@@ -48,8 +49,7 @@ const phoneCodes = [
   { code: '+44', country: 'Reino Unido', flag: 'https://flagcdn.com/gb.svg', prefix: '+44' },
   { code: '+39', country: 'Italia', flag: 'https://flagcdn.com/it.svg', prefix: '+39' },
   { code: '+351', country: 'Portugal', flag: 'https://flagcdn.com/pt.svg', prefix: '+351' },
-  { code: '+55', country: 'Brasil', flag: 'https://flagcdn.com/br.svg', prefix: '+55' },
-  { code: '+18', country: 'Bielorrusia', flag: 'https://flagcdn.com/by.svg', prefix: '+18' }
+  { code: '+55', country: 'Brasil', flag: 'https://flagcdn.com/br.svg', prefix: '+55' }
 ];
 
 const tiposJoya = [
@@ -68,7 +68,7 @@ const tiposMaterial = [
 
 function NuevaRecepcion() {
   const navigate = useNavigate();
-  const { clients, createClient, createOrder } = useApp();
+  const { clients, orders, createClient, createOrder } = useApp();
   const [step, setStep] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [showClientSearch, setShowClientSearch] = useState(false);
@@ -99,10 +99,49 @@ function NuevaRecepcion() {
     setCliente(prev => ({ ...prev, phone: fullPhone }));
   }, [selectedPhoneCode, phoneNumber]);
 
+  // ============================================
+  // NUEVA FUNCIÓN: Generar número de orden secuencial LAM/1, LAM/2...
+  // ============================================
+  const generarNumeroOrden = async () => {
+    try {
+      // Obtener la última orden creada
+      const { data: lastOrder, error } = await supabase
+        .from('ordenes')
+        .select('order_number')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+
+      let lastNumber = 0;
+      
+      if (lastOrder && lastOrder.length > 0 && lastOrder[0].order_number) {
+        const match = lastOrder[0].order_number.match(/LAM\/(\d+)/);
+        if (match) {
+          lastNumber = parseInt(match[1]);
+        }
+      }
+      
+      const newNumber = lastNumber + 1;
+      return `LAM/${newNumber}`;
+    } catch (error) {
+      console.error('Error generando número de orden:', error);
+      // Fallback: usar timestamp si hay error
+      return `LAM/${Date.now()}`;
+    }
+  };
+
+  // Validar teléfono (mínimo 6 dígitos)
+  const isValidPhone = () => {
+    const digits = phoneNumber.replace(/\D/g, '');
+    return digits.length >= 6;
+  };
+
   // Buscar clientes existentes
   const filteredClients = clients.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.phone.includes(searchTerm)
+    c.phone.includes(searchTerm) ||
+    (c.email && c.email.toLowerCase().includes(searchTerm.toLowerCase()))
   ).slice(0, 5);
 
   const handleSelectClient = (client) => {
@@ -126,15 +165,6 @@ function NuevaRecepcion() {
     setStep(2);
   };
 
-  const generarNumeroRecepcion = () => {
-    const fecha = new Date();
-    const año = fecha.getFullYear().toString().slice(-2);
-    const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
-    const dia = fecha.getDate().toString().padStart(2, '0');
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `R-${año}${mes}${dia}-${random}`;
-  };
-
   const handleGuardarRecepcion = async () => {
     setLoading(true);
     setError(null);
@@ -153,7 +183,9 @@ function NuevaRecepcion() {
         clientId = newClient.id;
       }
 
-      const orderNumber = generarNumeroRecepcion();
+      // Generar número de orden secuencial
+      const orderNumber = await generarNumeroOrden();
+
       const newOrder = await createOrder({
         order_number: orderNumber,
         client_id: clientId,
@@ -195,10 +227,8 @@ function NuevaRecepcion() {
     }
   };
 
-  // Validar que el paso 1 esté completo
-  const isStep1Complete = cliente.name && (phoneNumber.trim() !== '' || cliente.phone);
-
-  // Validar que el paso 2 esté completo
+  // Validaciones
+  const isStep1Complete = cliente.name && isValidPhone();
   const isStep2Complete = recepcion.itemType && recepcion.material && recepcion.description;
 
   return (
@@ -277,7 +307,7 @@ function NuevaRecepcion() {
               <div className="mt-3">
                 <input
                   type="text"
-                  placeholder="Buscar por nombre o teléfono..."
+                  placeholder="Buscar por nombre, teléfono o email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent"
@@ -294,6 +324,7 @@ function NuevaRecepcion() {
                         <div>
                           <p className="font-medium text-gray-800">{client.name}</p>
                           <p className="text-sm text-gray-500">{client.phone}</p>
+                          {client.email && <p className="text-xs text-gray-400">{client.email}</p>}
                         </div>
                         <ChevronRight className="w-4 h-4 text-gray-400" />
                       </div>
@@ -306,7 +337,7 @@ function NuevaRecepcion() {
             )}
           </div>
 
-          {/* Formulario cliente con selector de país con banderas */}
+          {/* Formulario cliente */}
           <div className="border-t pt-4">
             <p className="text-sm text-gray-500 mb-4">O ingresa un cliente nuevo:</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -320,13 +351,12 @@ function NuevaRecepcion() {
                 />
               </div>
               
-              {/* Campo de teléfono con selector de código de país con banderas */}
+              {/* Campo de teléfono */}
               <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Teléfono *
                 </label>
                 <div className="flex">
-                  {/* Selector de código de país con bandera */}
                   <div className="relative">
                     <button
                       type="button"
@@ -371,7 +401,6 @@ function NuevaRecepcion() {
                     )}
                   </div>
                   
-                  {/* Número de teléfono */}
                   <input
                     type="tel"
                     placeholder="612 345 678"
@@ -380,6 +409,9 @@ function NuevaRecepcion() {
                     className="flex-1 px-4 py-2 border border-gray-200 border-l-0 rounded-r-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent"
                   />
                 </div>
+                {phoneNumber && !isValidPhone() && (
+                  <p className="text-xs text-red-500 mt-1">Mínimo 6 dígitos</p>
+                )}
               </div>
               
               <input
